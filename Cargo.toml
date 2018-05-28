@@ -1,0 +1,6 @@
+[package]
+name = "openml-rust"
+version = "0.1.0"
+authors = ["Martin Billinger <flkazemakase@gmail.com>"]
+
+[dependencies]
