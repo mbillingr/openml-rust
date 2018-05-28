@@ -1,5 +1,5 @@
 [package]
-name = "openml-rust"
+name = "openml"
 version = "0.1.0"
 authors = ["Martin Billinger <flkazemakase@gmail.com>"]
 
