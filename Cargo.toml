@@ -5,6 +5,7 @@ authors = ["Martin Billinger <flkazemakase@gmail.com>"]
 
 [dependencies]
 arff = { path = "../arff" }
+fs2 = "*"
 futures = "0.1"
 hyper = "0.11"
 hyper-tls = "0.1"

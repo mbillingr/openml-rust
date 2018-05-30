@@ -1,4 +1,5 @@
 extern crate arff;
+extern crate fs2;
 extern crate futures;
 extern crate hyper;
 extern crate hyper_tls;

@@ -1,13 +1,16 @@
 use std;
 use std::borrow::Cow;
+use std::error::Error as StdError;
 use std::fs;
 use std::io::{Read, Write};
 use std::ops::Index;
 use std::result;
 use std::string;
+use std::{thread, time};
 use std::path::Path;
 
 use arff;
+use fs2::FileExt;
 use futures::{Future, Stream};
 use hyper;
 use hyper_tls::{self, HttpsConnector};
@@ -228,15 +231,37 @@ impl<'a> From<&'a serde_json::Value> for Measure {
 }
 
 fn get_cached(url: &str) -> Result<String> {
-    // todo: this really should use some file locking mechanisms...
+    // todo: is there a potential race condition with a process locking the file for reading while
+    //       the writer has created but not yet locked the file?
     let filename = "cache/".to_owned() + &url_to_file(url);
     let path = Path::new(&filename);
-    if path.exists() {
-        load(&path)
-    } else {
-        let data = download(url)?;
-        store(&path, &data)?;
-        Ok(data)
+
+    loop {
+        match fs::File::open(path) {
+            Ok(mut f) => {
+                f.lock_shared()?;
+                let mut data = String::new();
+                f.read_to_string(&mut data)?;
+                f.unlock()?;
+                return Ok(data)
+            }
+            Err(e) => {}
+        }
+
+        match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(path)
+            {
+                Err(_) => continue,
+                Ok(mut f) => {
+                    f.lock_exclusive()?;
+                    let data = download(url)?;
+                    f.write_all(data.as_bytes())?;
+                    f.unlock().unwrap();
+                    return Ok(data)
+                }
+            }
     }
 }
 
@@ -261,19 +286,6 @@ fn download(url: &str) -> Result<String> {
     }
     let result = String::from_utf8(bytes)?;
     Ok(result)
-}
-
-fn load(path: &Path) -> Result<String> {
-    let mut file = fs::File::open(path)?;
-    let mut result = String::new();
-    file.read_to_string(&mut result)?;
-    Ok(result)
-}
-
-fn store(path: &Path, content: &str) -> Result<()> {
-    let mut file = fs::File::create(path)?;
-    file.write_all(content.as_bytes())?;
-    Ok(())
 }
 
 fn url_to_file(s: &str) -> String {
