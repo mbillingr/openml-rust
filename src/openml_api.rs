@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fs;
 use std::io::{Read, Write};
+use std::mem;
 use std::ops::Index;
 use std::result;
 use std::string;
@@ -27,6 +28,7 @@ enum Error {
     HyperUriError(hyper::error::UriError),
     HyperTlsError(hyper_tls::Error),
     JsonError(serde_json::Error),
+    ArffError(arff::Error),
 }
 
 impl From<std::io::Error> for Error {
@@ -51,6 +53,10 @@ impl From<hyper_tls::Error> for Error {
 
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self { Error::JsonError(e) }
+}
+
+impl From<arff::Error> for Error {
+    fn from(e: arff::Error) -> Self { Error::ArffError(e) }
 }
 
 
@@ -87,7 +93,7 @@ impl OpenML {
             task_id: task["task_id"].as_str().unwrap().to_owned(),
             task_name: task["task_name"].as_str().unwrap().to_owned(),
             task_type: TaskType {},
-            source_data: DataSet {},
+            source_data: (&inputs["source_data"]).into(),
             estimation_procedure: (&inputs["estimation_procedure"]).into(),
             cost_matrix: (&inputs["cost_matrix"]).into(),
             evaluation_measures: (&inputs["evaluation_measures"]).into(),
@@ -156,7 +162,24 @@ struct TaskType {
 
 #[derive(Debug)]
 struct DataSet {
+    arff: arff::DataSet,
+}
 
+impl<'a> From<&'a serde_json::Value> for DataSet {
+    fn from(v: &serde_json::Value) -> Self {
+        let id = v["data_set_id"].as_str().unwrap();
+        let target = v["target_feature"].as_str();
+
+        let info_url = format!("https://www.openml.org/api/v1/json/data/{}", id.as_string());
+        let info: GenericResponse =  serde_json::from_str(&get_cached(&info_url).unwrap()).unwrap();
+
+        let dset_url = info.look_up("/data_set_description/url").unwrap().as_str().unwrap();
+        let dset = arff::DataSet::from_str(&get_cached(&dset_url).unwrap()).unwrap();
+
+        DataSet {
+            arff: dset
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -169,7 +192,7 @@ impl<'a> From<&'a serde_json::Value> for Procedure {
         let typ = v["type"].as_str();
         let splits = v["data_splits_url"].as_str();
         match (typ, splits) {
-            (_, Some(url)) => Procedure::Frozen(CrossValSplits::load(url)),
+            (_, Some(url)) => Procedure::Frozen(CrossValSplits::load(url).unwrap()),
             _ => unimplemented!(),
         }
     }
@@ -181,23 +204,33 @@ struct CrossValSplits {
 }
 
 impl CrossValSplits {
-    fn load(url: &str) -> Self {
-        let raw = get_cached(url).unwrap();
-        unimplemented!()
+    fn load(url: &str) -> Result<Self> {
+        let raw = get_cached(url)?;
+        let data = arff::from_str(&raw)?;
+        Ok(CrossValSplits {
+            data
+        })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 struct CrossValItem {
+    #[serde(rename = "type")]
     purpose: TrainTest,
+
     rowid: usize,
+
     repeat: usize,
+
     fold: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 enum TrainTest {
+    #[serde(rename = "TRAIN")]
     Train,
+
+    #[serde(rename = "TEST")]
     Test,
 }
 
@@ -239,10 +272,9 @@ fn get_cached(url: &str) -> Result<String> {
     loop {
         match fs::File::open(path) {
             Ok(mut f) => {
-                f.lock_shared()?;
+                let mut file = SharedLock::new(f)?;
                 let mut data = String::new();
-                f.read_to_string(&mut data)?;
-                f.unlock()?;
+                file.read_to_string(&mut data)?;
                 return Ok(data)
             }
             Err(e) => {}
@@ -255,10 +287,9 @@ fn get_cached(url: &str) -> Result<String> {
             {
                 Err(_) => continue,
                 Ok(mut f) => {
-                    f.lock_exclusive()?;
+                    let mut file = ExclusiveLock::new(f)?;
                     let data = download(url)?;
-                    f.write_all(data.as_bytes())?;
-                    f.unlock().unwrap();
+                    file.write_all(data.as_bytes())?;
                     return Ok(data)
                 }
             }
@@ -290,6 +321,82 @@ fn download(url: &str) -> Result<String> {
 
 fn url_to_file(s: &str) -> String {
     s.replace('/', "_").replace(':', "")
+}
+
+struct ExclusiveLock {
+    file: fs::File
+}
+
+impl ExclusiveLock {
+    fn new(file: fs::File) -> Result<Self> {
+        file.lock_exclusive()?;
+        Ok(ExclusiveLock {
+            file
+        })
+    }
+}
+
+impl Drop for ExclusiveLock {
+    fn drop(&mut self) {
+        self.file.unlock().unwrap();
+    }
+}
+
+impl Read for ExclusiveLock {
+    #[inline(always)]
+    fn read(&mut self, data: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(data)
+    }
+}
+
+impl Write for ExclusiveLock {
+    #[inline(always)]
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.file.write(data)
+    }
+
+    #[inline(always)]
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
+}
+
+struct SharedLock {
+    file: fs::File
+}
+
+impl SharedLock {
+    fn new(file: fs::File) -> Result<Self> {
+        file.lock_shared()?;
+        Ok(SharedLock {
+            file
+        })
+    }
+}
+
+impl Drop for SharedLock {
+    fn drop(&mut self) {
+        self.file.unlock().unwrap();
+    }
+}
+
+impl Read for SharedLock {
+    #[inline(always)]
+    fn read(&mut self, data: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(data)
+    }
+}
+
+impl Write for SharedLock {
+    #[inline(always)]
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.file.write(data)
+    }
+
+    #[inline(always)]
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
 }
 
 
