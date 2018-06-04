@@ -15,6 +15,7 @@ use fs2::FileExt;
 use futures::{Future, Stream};
 use hyper;
 use hyper_tls::{self, HttpsConnector};
+use log::Level;
 use serde_json;
 use tokio_core::reactor::Core;
 
@@ -270,8 +271,10 @@ fn get_cached(url: &str) -> Result<String> {
     let path = Path::new(&filename);
 
     loop {
+
         match fs::File::open(path) {
             Ok(mut f) => {
+                info!("Loading cached {}", url);
                 let mut file = SharedLock::new(f)?;
                 let mut data = String::new();
                 file.read_to_string(&mut data)?;
@@ -285,8 +288,16 @@ fn get_cached(url: &str) -> Result<String> {
             .write(true)
             .open(path)
             {
-                Err(_) => continue,
+                Err(e) => {
+                    // todo: is this the correct io error raised if another thread has locked the file currently?
+                    if let std::io::ErrorKind::PermissionDenied = e.kind() {
+                        continue
+                    }
+                    error!("Error while opening cache for writing: {:?}", e);
+                    return Err(e.into())
+                },
                 Ok(mut f) => {
+                    info!("Downloading {}", url);
                     let mut file = ExclusiveLock::new(f)?;
                     let data = download(url)?;
                     file.write_all(data.as_bytes())?;
@@ -402,6 +413,8 @@ impl Write for SharedLock {
 
 #[test]
 fn apidev() {
+    use simple_logger;
+    simple_logger::init_with_level(Level::Info).unwrap();
     let mut api = OpenML::new();
-    println!("{:?}", api.get_task(166850).unwrap());
+    println!("{:#?}", api.get_task(166850).unwrap());
 }
