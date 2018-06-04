@@ -183,9 +183,55 @@ impl<'a> From<&'a serde_json::Value> for DataSet {
     }
 }
 
+#[derive(Debug, Clone)]
+struct CrossValidationFold {
+    trainset: Vec<usize>,
+    testset: Vec<usize>,
+}
+
+impl CrossValidationFold {
+    fn new() -> Self {
+        CrossValidationFold {
+            trainset: Vec::new(),
+            testset: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct CrossValidation {
+    folds: Vec<Vec<CrossValidationFold>>
+}
+
+impl From<CrossValSplits> for CrossValidation {
+    fn from(xvs: CrossValSplits) -> Self {
+        let mut folds = vec![];
+        for item in xvs.data {
+            if item.repeat >= folds.len() {
+                folds.resize(item.repeat + 1, vec![]);
+            }
+            let mut rep = &mut folds[item.repeat];
+
+            if item.fold >= rep.len() {
+                rep.resize(item.fold + 1, CrossValidationFold::new());
+            }
+            let mut fold = &mut rep[item.fold];
+
+            match item.purpose {
+                TrainTest::Train => fold.trainset.push(item.rowid),
+                TrainTest::Test => fold.testset.push(item.rowid),
+            }
+        }
+
+        CrossValidation {
+            folds
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Procedure {
-    Frozen(CrossValSplits),
+    Frozen(CrossValidation),
 }
 
 impl<'a> From<&'a serde_json::Value> for Procedure {
@@ -193,7 +239,9 @@ impl<'a> From<&'a serde_json::Value> for Procedure {
         let typ = v["type"].as_str();
         let splits = v["data_splits_url"].as_str();
         match (typ, splits) {
-            (_, Some(url)) => Procedure::Frozen(CrossValSplits::load(url).unwrap()),
+            (_, Some(url)) => {
+                Procedure::Frozen(CrossValSplits::load(url).unwrap().into())
+            },
             _ => unimplemented!(),
         }
     }
