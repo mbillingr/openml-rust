@@ -16,6 +16,7 @@ use futures::{Future, Stream};
 use hyper;
 use hyper_tls::{self, HttpsConnector};
 use log::Level;
+use serde;
 use serde_json;
 use tokio_core::reactor::Core;
 
@@ -69,7 +70,10 @@ impl OpenML {
         OpenML {}
     }
 
-    pub fn get_task<T: Id>(&mut self, id: T) -> Result<Task> {
+    pub fn get_task<'a, T, D>(&mut self, id: T) -> Result<Task<D>>
+        where T: Id,
+              D: serde::de::DeserializeOwned,
+    {
         let url = format!("https://www.openml.org/api/v1/json/task/{}", id.as_string());
         let raw_task = get_cached(&url)?;
         let response: GenericResponse = serde_json::from_str(&raw_task)?;
@@ -144,16 +148,15 @@ impl GenericResponse {
 }
 
 #[derive(Debug)]
-struct Task {
+struct Task<T> {
     task_id: String,
     task_name: String,
     task_type: TaskType,
-    source_data: DataSet,
+    source_data: DataSet<T>,
     estimation_procedure: Procedure,
     cost_matrix: CostMatrix,
     evaluation_measures: Measure,
 }
-
 
 
 #[derive(Debug)]
@@ -162,11 +165,13 @@ struct TaskType {
 }
 
 #[derive(Debug)]
-struct DataSet {
-    arff: arff::DataSet,
+struct DataSet<T> {
+    arff: arff::ArffArray<T>,
 }
 
-impl<'a> From<&'a serde_json::Value> for DataSet {
+impl<'a, T> From<&'a serde_json::Value> for DataSet<T>
+    where T: serde::de::DeserializeOwned,
+{
     fn from(v: &serde_json::Value) -> Self {
         let id = v["data_set_id"].as_str().unwrap();
         let target = v["target_feature"].as_str();
@@ -175,7 +180,8 @@ impl<'a> From<&'a serde_json::Value> for DataSet {
         let info: GenericResponse =  serde_json::from_str(&get_cached(&info_url).unwrap()).unwrap();
 
         let dset_url = info.look_up("/data_set_description/url").unwrap().as_str().unwrap();
-        let dset = arff::DataSet::from_str(&get_cached(&dset_url).unwrap()).unwrap();
+        let dset_str = get_cached(&dset_url).unwrap();
+        let dset = arff::array_from_str(&dset_str).unwrap();
 
         DataSet {
             arff: dset
@@ -464,5 +470,5 @@ fn apidev() {
     use simple_logger;
     simple_logger::init_with_level(Level::Info).unwrap();
     let mut api = OpenML::new();
-    println!("{:#?}", api.get_task(166850).unwrap());
+    println!("{:#?}", api.get_task::<_, f64>(166850).unwrap());
 }
