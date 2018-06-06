@@ -5,6 +5,7 @@ extern crate hyper;
 extern crate hyper_tls;
 #[macro_use]
 extern crate log;
+extern crate ndarray;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
