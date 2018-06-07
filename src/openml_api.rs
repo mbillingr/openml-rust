@@ -94,7 +94,7 @@ impl OpenML {
         Ok(Task {
             task_id: task["task_id"].as_str().unwrap().to_owned(),
             task_name: task["task_name"].as_str().unwrap().to_owned(),
-            task_type: (&task["task_type_id"]).into(),
+            task_type: create_task_type(&task["task_type_id"]),
             source_data: (&inputs["source_data"]).into(),
             estimation_procedure: (&inputs["estimation_procedure"]).into(),
             cost_matrix: (&inputs["cost_matrix"]).into(),
@@ -144,11 +144,10 @@ impl GenericResponse {
     }
 }
 
-#[derive(Debug)]
 struct Task {
     task_id: String,
     task_name: String,
-    task_type: TaskType,
+    task_type: Box<TaskType>,
     source_data: DataSet,
     estimation_procedure: Procedure,
     cost_matrix: CostMatrix,
@@ -156,24 +155,98 @@ struct Task {
 }
 
 
+type FlowFunction = Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>;
+
+
 impl Task {
 
-    pub fn perform<F>(&self, flow: F) -> Box<MeasureAccumulator>
-        where F: Fn(arff::Array<f64>, arff::Array<usize>, arff::Array<f64>) -> Vec<usize>
+    pub fn perform<F: 'static>(&self, flow: F) -> Box<MeasureAccumulator>
+        where F: Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>
     {
-        self.task_type.perform(&self, flow)
+        self.task_type.perform(&self, &flow)
     }
 }
 
 
+trait TaskType {
+    fn perform(&self, task: &Task, flow: &FlowFunction) -> Box<MeasureAccumulator>;
+}
+
+
+fn create_task_type(v: &serde_json::Value) -> Box<TaskType> {
+    match v.as_str() {
+        Some("1") => Box::new(SupervisedClassification {}),
+        Some("2") => Box::new(SupervisedRegression {}),
+        _ => panic!("unsupported task type")
+    }
+}
+
+
+struct SupervisedRegression {
+
+}
+
+impl TaskType for SupervisedRegression {
+    fn perform(&self, task: &Task, flow: &FlowFunction) -> Box<MeasureAccumulator> {
+        unimplemented!()
+    }
+}
+
+
+struct SupervisedClassification {
+
+}
+
+impl TaskType for SupervisedClassification {
+    fn perform(&self, task: &Task, flow: &Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>) -> Box<MeasureAccumulator> {
+        let (x, y) = match task.source_data.target {
+            None => {
+                let y = task.source_data.arff.clone_cols(&[]);
+                let x = task.source_data.arff.clone();
+                (x, y)
+            }
+
+            Some(ref col) => {
+                let features: Vec<_> = task.source_data.arff
+                    .raw_attributes()
+                    .iter()
+                    .map(|attr| &attr.name)
+                    .enumerate()
+                    .filter_map(|(i, n)| if n == col { None } else { Some(i) })
+                    .collect();
+                let y = task.source_data.arff.clone_cols_by_name(&[col]);
+                let x = task.source_data.arff.clone_cols(&features);
+                (x, y)
+            }
+        };
+
+        let mut measure = task.evaluation_measures.create();
+
+        for fold in task.estimation_procedure.iter() {
+            let x_train = x.clone_rows(&fold.trainset);
+            let y_train = y.clone_rows(&fold.trainset);
+            let x_test = x.clone_rows(&fold.testset);
+            let y_test = y.clone_rows(&fold.testset);
+
+            let predictions = flow(x_train, y_train, x_test);
+
+            measure.update(y_test.raw_data(), &predictions);
+        }
+
+        measure
+    }
+}
+
+/*
 #[derive(Debug)]
 enum TaskType {
-    SupervisedClassification
+    SupervisedClassification,
+    //SupervisedRegression,
 }
 
 impl TaskType {
     pub fn perform<F>(&self, task: &Task, flow: F) -> Box<MeasureAccumulator>
-        where F: Fn(arff::Array<f64>, arff::Array<usize>, arff::Array<f64>) -> Vec<usize>
+        where F: Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>
     {
         match *self {
             TaskType::SupervisedClassification => {
@@ -181,7 +254,7 @@ impl TaskType {
                     None => {
                         let y = task.source_data.arff.clone_cols(&[]);
                         let x = task.source_data.arff.clone();
-                        (x, y.to_usize_array().unwrap())
+                        (x, y)
                     }
 
                     Some(ref col) => {
@@ -194,7 +267,7 @@ impl TaskType {
                             .collect();
                         let y = task.source_data.arff.clone_cols_by_name(&[col]);
                         let x = task.source_data.arff.clone_cols(&features);
-                        (x, y.to_usize_array().unwrap())
+                        (x, y)
                     }
                 };
 
@@ -225,7 +298,7 @@ impl<'a> From<&'a serde_json::Value> for TaskType
             _ => panic!("unsupported task type")
         }
     }
-}
+}*/
 
 #[derive(Debug)]
 struct DataSet {
@@ -413,7 +486,7 @@ impl<'a> From<&'a serde_json::Value> for Measure {
 }
 
 trait MeasureAccumulator: ::std::fmt::Debug {
-    fn update(&mut self, known: &[usize], predicted: &[usize]);
+    fn update(&mut self, known: &[f64], predicted: &[f64]);
     fn result(&self) -> f64;
 }
 
@@ -433,7 +506,7 @@ impl Accuracy {
 }
 
 impl MeasureAccumulator for Accuracy {
-    fn update(&mut self, known: &[usize], predicted: &[usize]) {
+    fn update(&mut self, known: &[f64], predicted: &[f64]) {
         for (k, p) in known.iter().zip(predicted.iter()) {
             if k == p {
                 self.n_correct += 1.0;
@@ -459,7 +532,7 @@ impl ZeroMeasure {
 }
 
 impl MeasureAccumulator for ZeroMeasure {
-    fn update(&mut self, known: &[usize], predicted: &[usize]) { }
+    fn update(&mut self, known: &[f64], predicted: &[f64]) { }
 
     fn result(&self) -> f64 {
         0.0
@@ -615,14 +688,26 @@ impl Write for SharedLock {
 
 #[test]
 fn apidev() {
+    let mut api = OpenML::new();
+    let task = api.get_task(166850).unwrap();
+
+    let result = task.perform(|x_train, y_train, x_test| {
+        (0..x_test.n_rows()).map(|_| 0.0).collect()
+    });
+    println!("{:#?}", result);
+}
+
+
+#[test]
+fn apidev2() {
     use simple_logger;
     simple_logger::init_with_level(Level::Info).unwrap();
     let mut api = OpenML::new();
-    let task = api.get_task(166850).unwrap();
-    println!("{:#?}", task);
+    //let task = api.get_task(146825).unwrap();
+    let task = api.get_task(167147).unwrap();
 
     let result = task.perform(|x_train, y_train, x_test| {
-        (0..x_test.n_rows()).map(|_| 0).collect()
+        (0..x_test.n_rows()).map(|_| 0.0).collect()
     });
     println!("{:#?}", result);
 }
