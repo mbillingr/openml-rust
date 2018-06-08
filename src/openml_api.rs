@@ -20,10 +20,10 @@ use serde;
 use serde_json;
 use tokio_core::reactor::Core;
 
-type Result<T> = result::Result<T, Error>;
+pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
-enum Error {
+pub enum Error {
     IoError(std::io::Error),
     Utf8Error(string::FromUtf8Error),
     HyperError(hyper::Error),
@@ -62,7 +62,7 @@ impl From<arff::Error> for Error {
 }
 
 
-struct OpenML {
+pub struct OpenML {
 }
 
 impl OpenML {
@@ -96,7 +96,7 @@ impl OpenML {
 }
 
 
-trait Id {
+pub trait Id {
     fn as_string(&self) -> Cow<str>;
     fn as_u32(&self) -> u32;
 }
@@ -136,7 +136,7 @@ impl GenericResponse {
     }
 }
 
-struct Task {
+pub struct Task {
     task_id: String,
     task_name: String,
     task_type: Box<TaskType>,
@@ -495,7 +495,7 @@ impl Measure {
     }
 }
 
-trait MeasureAccumulator: ::std::fmt::Debug {
+pub trait MeasureAccumulator: ::std::fmt::Debug {
     fn update(&mut self, known: &[f64], predicted: &[f64]);
     fn result(&self) -> f64;
 }

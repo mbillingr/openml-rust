@@ -17,6 +17,10 @@ extern crate tokio_core;
 
 mod openml_api;
 
+pub use arff::Array;
+
+pub use openml_api::OpenML;
+
 
 #[cfg(test)]
 mod tests {
