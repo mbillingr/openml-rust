@@ -70,36 +70,28 @@ impl OpenML {
         OpenML {}
     }
 
-    pub fn get_task<'a, T: Id>(&mut self, id: T) -> Result<Task> {
+    pub fn task<'a, T: Id>(&mut self, id: T) -> Result<Task> {
         let url = format!("https://www.openml.org/api/v1/json/task/{}", id.as_string());
         let raw_task = get_cached(&url)?;
         let response: GenericResponse = serde_json::from_str(&raw_task)?;
 
         let task = response.look_up("/task").unwrap();
 
-        // bring input array into a form that can be looked up by name
-        let mut inputs = serde_json::Map::new();
-        for input in task["input"].as_array().unwrap() {
-            match input["name"].as_str() {
-                None => panic!("Input missing `name` field"),
-                Some("source_data") => {
-                    inputs.insert(String::from("source_data"), input["data_set"].clone());
-                }
-                Some(name) => {
-                    inputs.insert(String::from(name), input[name].clone());
-                }
-            }
-        }
-
         Ok(Task {
             task_id: task["task_id"].as_str().unwrap().to_owned(),
             task_name: task["task_name"].as_str().unwrap().to_owned(),
-            task_type: create_task_type(&task["task_type_id"]),
-            source_data: (&inputs["source_data"]).into(),
-            estimation_procedure: (&inputs["estimation_procedure"]).into(),
-            cost_matrix: (&inputs["cost_matrix"]).into(),
-            evaluation_measures: (&inputs["evaluation_measures"]).into(),
+            task_type: OpenML::task_type(task),
         })
+    }
+
+    fn task_type(task_json: &serde_json::Value) -> Box<TaskType> {
+        let input = task_json["input"].as_array().unwrap();
+
+        match task_json["task_type_id"].as_str() {
+            Some("1") => Box::new(SupervisedClassification::new(input)),
+            Some("2") => Box::new(SupervisedRegression::new(input)),
+            tt @ _ => panic!("unsupported task type {:?}", tt)
+        }
     }
 }
 
@@ -148,10 +140,6 @@ struct Task {
     task_id: String,
     task_name: String,
     task_type: Box<TaskType>,
-    source_data: DataSet,
-    estimation_procedure: Procedure,
-    cost_matrix: CostMatrix,
-    evaluation_measures: Measure,
 }
 
 
@@ -173,56 +161,62 @@ trait TaskType {
 }
 
 
-fn create_task_type(v: &serde_json::Value) -> Box<TaskType> {
-    match v.as_str() {
-        Some("1") => Box::new(SupervisedClassification {}),
-        Some("2") => Box::new(SupervisedRegression {}),
-        _ => panic!("unsupported task type")
-    }
+struct SupervisedRegression {
+    source_data: DataSet,
+    estimation_procedure: Procedure,
+    evaluation_measures: Measure,
 }
 
+impl SupervisedRegression {
+    fn new(input_json: &Vec<serde_json::Value>) -> Self {
+        let mut source_data = None;
+        let mut estimation_procedure = None;
+        let mut evaluation_measures = None;
 
-struct SupervisedRegression {
+        for input_item in input_json {
+            match input_item["name"].as_str() {
+                Some("source_data") => source_data = Some(input_item.into()),
+                Some("estimation_procedure") => estimation_procedure = Some(input_item.into()),
+                Some("evaluation_measures") => evaluation_measures = Measure::new(input_item),
+                Some(_) => {}
+                None => panic!("/task/input/name is not a string")
+            }
+        }
 
+        SupervisedRegression {
+            source_data: source_data.unwrap(),
+            estimation_procedure: estimation_procedure.unwrap(),
+            evaluation_measures: evaluation_measures.unwrap(),
+        }
+    }
 }
 
 impl TaskType for SupervisedRegression {
     fn perform(&self, task: &Task, flow: &FlowFunction) -> Box<MeasureAccumulator> {
-        unimplemented!()
-    }
-}
-
-
-struct SupervisedClassification {
-
-}
-
-impl TaskType for SupervisedClassification {
-    fn perform(&self, task: &Task, flow: &Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>) -> Box<MeasureAccumulator> {
-        let (x, y) = match task.source_data.target {
+        let (x, y) = match self.source_data.target {
             None => {
-                let y = task.source_data.arff.clone_cols(&[]);
-                let x = task.source_data.arff.clone();
+                let y = self.source_data.arff.clone_cols(&[]);
+                let x = self.source_data.arff.clone();
                 (x, y)
             }
 
             Some(ref col) => {
-                let features: Vec<_> = task.source_data.arff
+                let features: Vec<_> = self.source_data.arff
                     .raw_attributes()
                     .iter()
                     .map(|attr| &attr.name)
                     .enumerate()
                     .filter_map(|(i, n)| if n == col { None } else { Some(i) })
                     .collect();
-                let y = task.source_data.arff.clone_cols_by_name(&[col]);
-                let x = task.source_data.arff.clone_cols(&features);
+                let y = self.source_data.arff.clone_cols_by_name(&[col]);
+                let x = self.source_data.arff.clone_cols(&features);
                 (x, y)
             }
         };
 
-        let mut measure = task.evaluation_measures.create();
+        let mut measure = self.evaluation_measures.create();
 
-        for fold in task.estimation_procedure.iter() {
+        for fold in self.estimation_procedure.iter() {
             let x_train = x.clone_rows(&fold.trainset);
             let y_train = y.clone_rows(&fold.trainset);
             let x_test = x.clone_rows(&fold.testset);
@@ -237,68 +231,80 @@ impl TaskType for SupervisedClassification {
     }
 }
 
-/*
-#[derive(Debug)]
-enum TaskType {
-    SupervisedClassification,
-    //SupervisedRegression,
+
+struct SupervisedClassification {
+    source_data: DataSet,
+    estimation_procedure: Procedure,
+    cost_matrix: CostMatrix,
+    evaluation_measures: Measure,
 }
 
-impl TaskType {
-    pub fn perform<F>(&self, task: &Task, flow: F) -> Box<MeasureAccumulator>
-        where F: Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>
-    {
-        match *self {
-            TaskType::SupervisedClassification => {
-                let (x, y) = match task.source_data.target {
-                    None => {
-                        let y = task.source_data.arff.clone_cols(&[]);
-                        let x = task.source_data.arff.clone();
-                        (x, y)
-                    }
+impl SupervisedClassification {
+    fn new(input_json: &Vec<serde_json::Value>) -> Self {
+        let mut source_data = None;
+        let mut estimation_procedure = None;
+        let mut cost_matrix = None;
+        let mut evaluation_measures = Measure::PredictiveAccuracy;  // default
 
-                    Some(ref col) => {
-                        let features: Vec<_> = task.source_data.arff
-                            .raw_attributes()
-                            .iter()
-                            .map(|attr| &attr.name)
-                            .enumerate()
-                            .filter_map(|(i, n)| if n == col { None } else { Some(i) })
-                            .collect();
-                        let y = task.source_data.arff.clone_cols_by_name(&[col]);
-                        let x = task.source_data.arff.clone_cols(&features);
-                        (x, y)
-                    }
-                };
-
-                let mut measure = task.evaluation_measures.create();
-
-                for fold in task.estimation_procedure.iter() {
-                    let x_train = x.clone_rows(&fold.trainset);
-                    let y_train = y.clone_rows(&fold.trainset);
-                    let x_test = x.clone_rows(&fold.testset);
-                    let y_test = y.clone_rows(&fold.testset);
-
-                    let predictions = flow(x_train, y_train, x_test);
-
-                    measure.update(y_test.raw_data(), &predictions);
-                }
-
-                measure
+        for input_item in input_json {
+            match input_item["name"].as_str() {
+                Some("source_data") => source_data = Some(input_item.into()),
+                Some("estimation_procedure") => estimation_procedure = Some(input_item.into()),
+                Some("cost_matrix") => cost_matrix = Some(input_item.into()),
+                Some("evaluation_measures") => evaluation_measures = Measure::new(input_item).unwrap_or(evaluation_measures),
+                Some(_) => {}
+                None => panic!("/task/input/name is not a string")
             }
         }
+
+        SupervisedClassification {
+            source_data: source_data.unwrap(),
+            estimation_procedure: estimation_procedure.unwrap(),
+            cost_matrix: cost_matrix.unwrap(),
+            evaluation_measures: evaluation_measures,
+        }
     }
 }
 
-impl<'a> From<&'a serde_json::Value> for TaskType
-{
-    fn from(v: &serde_json::Value) -> Self {
-        match v.as_str() {
-            Some("1") => TaskType::SupervisedClassification,
-            _ => panic!("unsupported task type")
+impl TaskType for SupervisedClassification {
+    fn perform(&self, task: &Task, flow: &Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>) -> Box<MeasureAccumulator> {
+        let (x, y) = match self.source_data.target {
+            None => {
+                let y = self.source_data.arff.clone_cols(&[]);
+                let x = self.source_data.arff.clone();
+                (x, y)
+            }
+
+            Some(ref col) => {
+                let features: Vec<_> = self.source_data.arff
+                    .raw_attributes()
+                    .iter()
+                    .map(|attr| &attr.name)
+                    .enumerate()
+                    .filter_map(|(i, n)| if n == col { None } else { Some(i) })
+                    .collect();
+                let y = self.source_data.arff.clone_cols_by_name(&[col]);
+                let x = self.source_data.arff.clone_cols(&features);
+                (x, y)
+            }
+        };
+
+        let mut measure = self.evaluation_measures.create();
+
+        for fold in self.estimation_procedure.iter() {
+            let x_train = x.clone_rows(&fold.trainset);
+            let y_train = y.clone_rows(&fold.trainset);
+            let x_test = x.clone_rows(&fold.testset);
+            let y_test = y.clone_rows(&fold.testset);
+
+            let predictions = flow(x_train, y_train, x_test);
+
+            measure.update(y_test.raw_data(), &predictions);
         }
+
+        measure
     }
-}*/
+}
 
 #[derive(Debug)]
 struct DataSet {
@@ -308,7 +314,8 @@ struct DataSet {
 
 impl<'a> From<&'a serde_json::Value> for DataSet
 {
-    fn from(v: &serde_json::Value) -> Self {
+    fn from(item: &serde_json::Value) -> Self {
+        let v = &item["data_set"];
         let id = v["data_set_id"].as_str().unwrap();
         let target = v["target_feature"].as_str();
 
@@ -398,7 +405,8 @@ impl Procedure {
 }
 
 impl<'a> From<&'a serde_json::Value> for Procedure {
-    fn from(v: &serde_json::Value) -> Self {
+    fn from(item: &serde_json::Value) -> Self {
+        let v = &item["estimation_procedure"];
         let typ = v["type"].as_str();
         let splits = v["data_splits_url"].as_str();
         match (typ, splits) {
@@ -452,7 +460,8 @@ enum CostMatrix {
 }
 
 impl<'a> From<&'a serde_json::Value> for CostMatrix {
-    fn from(v: &serde_json::Value) -> Self {
+    fn from(item: &serde_json::Value) -> Self {
+        let v = &item["cost_matrix"];
         match v.as_array() {
             None => panic!("invalid cots matrix"),
             Some(c) if c.is_empty() => CostMatrix::None,
@@ -464,23 +473,24 @@ impl<'a> From<&'a serde_json::Value> for CostMatrix {
 #[derive(Debug)]
 enum Measure {
     PredictiveAccuracy,
-    Nothing,
+    RootMeanSquaredError,
 }
 
 impl Measure {
+    fn new(item: &serde_json::Value) -> Option<Self> {
+        let measure = item.pointer("/evaluation_measures/evaluation_measure").unwrap();
+        match *measure {
+            serde_json::Value::String(ref s) if s == "predictive_accuracy" => Some(Measure::PredictiveAccuracy),
+            serde_json::Value::String(ref s) if s == "root_mean_squared_error" => Some(Measure::RootMeanSquaredError),
+            serde_json::Value::Array(ref v) if v.is_empty() => None,
+            _ => panic!("Invalid evaluation measure: {:?}", measure),
+        }
+    }
+
     fn create(&self) -> Box<MeasureAccumulator> {
         match *self {
             Measure::PredictiveAccuracy => Box::new(Accuracy::new()),
-            Measure::Nothing => Box::new(ZeroMeasure::new()),
-        }
-    }
-}
-
-impl<'a> From<&'a serde_json::Value> for Measure {
-    fn from(v: &serde_json::Value) -> Self {
-        match v["evaluation_measure"].as_str() {
-            Some("predictive_accuracy") => Measure::PredictiveAccuracy,
-            _ => panic!("Invalid evaluation measure: {:?}", v),
+            Measure::RootMeanSquaredError => Box::new(RootMeanSquaredError::new()),
         }
     }
 }
@@ -522,20 +532,31 @@ impl MeasureAccumulator for Accuracy {
 }
 
 #[derive(Debug)]
-struct ZeroMeasure {
+struct RootMeanSquaredError {
+    sum_of_squares: f64,
+    n: usize,
 }
 
-impl ZeroMeasure {
+impl RootMeanSquaredError {
     fn new() -> Self {
-        ZeroMeasure {  }
+        RootMeanSquaredError {
+            sum_of_squares: 0.0,
+            n: 0,
+        }
     }
 }
 
-impl MeasureAccumulator for ZeroMeasure {
-    fn update(&mut self, known: &[f64], predicted: &[f64]) { }
+impl MeasureAccumulator for RootMeanSquaredError {
+    fn update(&mut self, known: &[f64], predicted: &[f64]) {
+        for (k, p) in known.iter().zip(predicted.iter()) {
+            let diff = k - p;
+            self.n += 1;
+            self.sum_of_squares += diff * diff;
+        }
+    }
 
     fn result(&self) -> f64 {
-        0.0
+        (self.sum_of_squares / self.n as f64).sqrt()
     }
 }
 
@@ -689,7 +710,7 @@ impl Write for SharedLock {
 #[test]
 fn apidev() {
     let mut api = OpenML::new();
-    let task = api.get_task(166850).unwrap();
+    let task = api.task(166850).unwrap();
 
     let result = task.perform(|x_train, y_train, x_test| {
         (0..x_test.n_rows()).map(|_| 0.0).collect()
@@ -703,8 +724,8 @@ fn apidev2() {
     use simple_logger;
     simple_logger::init_with_level(Level::Info).unwrap();
     let mut api = OpenML::new();
-    //let task = api.get_task(146825).unwrap();
-    let task = api.get_task(167147).unwrap();
+    let task = api.task(146825).unwrap();
+    //let task = api.task(167147).unwrap();
 
     let result = task.perform(|x_train, y_train, x_test| {
         (0..x_test.n_rows()).map(|_| 0.0).collect()
