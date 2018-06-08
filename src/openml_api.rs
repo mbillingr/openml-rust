@@ -147,6 +147,9 @@ type FlowFunction = Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> 
 
 
 impl Task {
+    pub fn name(&self) -> &str {
+        &self.task_name
+    }
 
     pub fn perform<F: 'static>(&self, flow: F) -> Box<MeasureAccumulator>
         where F: Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>
