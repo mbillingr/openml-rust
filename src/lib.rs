@@ -17,7 +17,7 @@ extern crate tokio_core;
 
 mod openml_api;
 
-pub use arff::Array;
+pub use arff::{Array, ArrayCastInto, ArrayCastFrom};
 
 pub use openml_api::OpenML;
 
