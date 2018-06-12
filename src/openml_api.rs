@@ -18,6 +18,7 @@ use hyper_tls::{self, HttpsConnector};
 use log::Level;
 use serde;
 use serde_json;
+use time::PreciseTime;
 use tokio_core::reactor::Core;
 
 pub type Result<T> = result::Result<T, Error>;
@@ -727,11 +728,18 @@ fn apidev2() {
     use simple_logger;
     simple_logger::init_with_level(Level::Info).unwrap();
     let mut api = OpenML::new();
+
+    let start = PreciseTime::now();
+
     let task = api.task(146825).unwrap();
     //let task = api.task(167147).unwrap();
+
+    let end = PreciseTime::now();
 
     let result = task.perform(|x_train, y_train, x_test| {
         (0..x_test.n_rows()).map(|_| 0.0).collect()
     });
     println!("{:#?}", result);
+
+    println!("loading took {} seconds.", start.to(end));
 }

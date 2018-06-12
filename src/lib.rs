@@ -13,6 +13,7 @@ extern crate serde_derive;
 extern crate serde_json;
 #[cfg(test)]
 extern crate simple_logger;
+extern crate time;
 extern crate tokio_core;
 
 mod openml_api;
