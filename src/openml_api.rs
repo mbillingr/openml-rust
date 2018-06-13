@@ -199,21 +199,18 @@ impl TaskType for SupervisedRegression {
     fn perform(&self, task: &Task, flow: &FlowFunction) -> Box<MeasureAccumulator> {
         let (x, y) = match self.source_data.target {
             None => {
-                let y = self.source_data.arff.clone_cols(&[]);
-                let x = self.source_data.arff.clone();
+                let x: arff::Array<f64> = self.source_data.arff.to_array().unwrap();
+                let y = arff::Array::<f64>::empty();
                 (x, y)
             }
 
             Some(ref col) => {
-                let features: Vec<_> = self.source_data.arff
-                    .raw_attributes()
-                    .iter()
-                    .map(|attr| &attr.name)
-                    .enumerate()
-                    .filter_map(|(i, n)| if n == col { None } else { Some(i) })
-                    .collect();
-                let y = self.source_data.arff.clone_cols_by_name(&[col]);
-                let x = self.source_data.arff.clone_cols(&features);
+                let data = self.source_data.arff.clone();
+                let (dx, dy) = data.split_one(col);
+
+                let x: arff::Array<f64> = dx.to_array().unwrap();
+                let y: arff::Array<f64> = dy.to_array().unwrap();
+
                 (x, y)
             }
         };
@@ -274,21 +271,18 @@ impl TaskType for SupervisedClassification {
     fn perform(&self, task: &Task, flow: &Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>) -> Box<MeasureAccumulator> {
         let (x, y) = match self.source_data.target {
             None => {
-                let y = self.source_data.arff.clone_cols(&[]);
-                let x = self.source_data.arff.clone();
+                let x: arff::Array<f64> = self.source_data.arff.to_array().unwrap();
+                let y = arff::Array::<f64>::empty();
                 (x, y)
             }
 
             Some(ref col) => {
-                let features: Vec<_> = self.source_data.arff
-                    .raw_attributes()
-                    .iter()
-                    .map(|attr| &attr.name)
-                    .enumerate()
-                    .filter_map(|(i, n)| if n == col { None } else { Some(i) })
-                    .collect();
-                let y = self.source_data.arff.clone_cols_by_name(&[col]);
-                let x = self.source_data.arff.clone_cols(&features);
+                let data = self.source_data.arff.clone();
+                let (dx, dy) = data.split_one(col);
+
+                let x: arff::Array<f64> = dx.to_array().unwrap();
+                let y: arff::Array<f64> = dy.to_array().unwrap();
+
                 (x, y)
             }
         };
@@ -312,7 +306,7 @@ impl TaskType for SupervisedClassification {
 
 #[derive(Debug)]
 struct DataSet {
-    arff: arff::Array<f64>,
+    arff: arff::dynamic::DataSet,
     target: Option<String>,
 }
 
@@ -338,7 +332,7 @@ impl<'a> From<&'a serde_json::Value> for DataSet
 
         let dset_url = info.look_up("/data_set_description/url").unwrap().as_str().unwrap();
         let dset_str = get_cached(&dset_url).unwrap();
-        let dset = arff::array_from_str(&dset_str).unwrap();
+        let dset = arff::dynamic::DataSet::from_str(&dset_str).unwrap();
 
         DataSet {
             arff: dset,
