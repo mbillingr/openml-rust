@@ -16,6 +16,7 @@ use futures::{Future, Stream};
 use hyper;
 use hyper_tls::{self, HttpsConnector};
 use log::Level;
+use num_traits::ToPrimitive;
 use serde;
 use serde_json;
 use time::PreciseTime;
@@ -85,12 +86,12 @@ impl OpenML {
         })
     }
 
-    fn task_type(task_json: &serde_json::Value) -> Box<TaskType> {
+    fn task_type(task_json: &serde_json::Value) -> TaskType {
         let input = task_json["input"].as_array().unwrap();
 
         match task_json["task_type_id"].as_str() {
-            Some("1") => Box::new(SupervisedClassification::new(input)),
-            Some("2") => Box::new(SupervisedRegression::new(input)),
+            Some("1") => TaskType::SupervisedClassification(SupervisedClassification::new(input)),
+            Some("2") => TaskType::SupervisedRegression(SupervisedRegression::new(input)),
             tt @ _ => panic!("unsupported task type {:?}", tt)
         }
     }
@@ -137,10 +138,11 @@ impl GenericResponse {
     }
 }
 
+#[derive(Debug)]
 pub struct Task {
     task_id: String,
     task_name: String,
-    task_type: Box<TaskType>,
+    task_type: TaskType,
 }
 
 
@@ -152,19 +154,61 @@ impl Task {
         &self.task_name
     }
 
-    pub fn perform<F: 'static>(&self, flow: F) -> Box<MeasureAccumulator>
-        where F: Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>
+    /// run task with statically known row size and column types
+    pub fn run_static<X, Y, F>(&self, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&X, &Y)>, &mut Iterator<Item=&X>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
     {
-        self.task_type.perform(&self, &flow)
+        self.task_type.run_static(&self, flow)
+    }
+
+    /// run task with unknown row size
+    pub fn run<X, Y, F>(&self, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&[X], &Y)>, &mut Iterator<Item=&[X]>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        self.task_type.run(&self, flow)
+    }
+}
+
+#[derive(Debug)]
+enum TaskType {
+    SupervisedRegression(SupervisedRegression),
+    SupervisedClassification(SupervisedClassification),
+}
+
+impl TaskType {
+    fn run_static<X, Y, F>(&self, task: &Task, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&X, &Y)>, &mut Iterator<Item=&X>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        match *self {
+            TaskType::SupervisedRegression(ref t) => t.run_static(task, flow),
+            TaskType::SupervisedClassification(ref t) => t.run_static(task, flow),
+        }
+    }
+
+    fn run<X, Y, F>(&self, task: &Task, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&[X], &Y)>, &mut Iterator<Item=&[X]>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        match *self {
+            TaskType::SupervisedRegression(ref t) => t.run(task, flow),
+            TaskType::SupervisedClassification(ref t) => t.run(task, flow),
+        }
     }
 }
 
 
-trait TaskType {
-    fn perform(&self, task: &Task, flow: &FlowFunction) -> Box<MeasureAccumulator>;
-}
-
-
+#[derive(Debug)]
 struct SupervisedRegression {
     source_data: DataSet,
     estimation_procedure: Procedure,
@@ -193,39 +237,70 @@ impl SupervisedRegression {
             evaluation_measures: evaluation_measures.unwrap(),
         }
     }
-}
 
-impl TaskType for SupervisedRegression {
-    fn perform(&self, task: &Task, flow: &FlowFunction) -> Box<MeasureAccumulator> {
-        let (x, y) = match self.source_data.target {
-            None => {
-                let x: arff::Array<f64> = self.source_data.arff.to_array().unwrap();
-                let y = arff::Array::<f64>::empty();
-                (x, y)
-            }
+    fn run_static<X, Y, F>(&self, task: &Task, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&X, &Y)>, &mut Iterator<Item=&X>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        let (dx, dy) = self.source_data
+            .clone_split()
+            .expect("Supervised Regression requires a target column");
 
-            Some(ref col) => {
-                let data = self.source_data.arff.clone();
-                let (dx, dy) = data.split_one(col);
-
-                let x: arff::Array<f64> = dx.to_array().unwrap();
-                let y: arff::Array<f64> = dy.to_array().unwrap();
-
-                (x, y)
-            }
-        };
+        let x: Vec<X> = arff::dynamic::de::from_dataset(&dx).unwrap();
+        let y: Vec<Y> = arff::dynamic::de::from_dataset(&dy).unwrap();
 
         let mut measure = self.evaluation_measures.create();
 
         for fold in self.estimation_procedure.iter() {
-            let x_train = x.clone_rows(&fold.trainset);
-            let y_train = y.clone_rows(&fold.trainset);
-            let x_test = x.clone_rows(&fold.testset);
-            let y_test = y.clone_rows(&fold.testset);
+            let mut train = fold.trainset
+                .iter()
+                .map(|&i| (&x[i], &y[i]));
 
-            let predictions = flow(x_train, y_train, x_test);
+            let mut test = fold.testset
+                .iter()
+                .map(|&i| &x[i]);
 
-            measure.update(y_test.raw_data(), &predictions);
+            let predictit = flow(&mut train, &mut test);
+
+            for (known, pred) in fold.testset.iter().map(|&i| &y[i]).zip(predictit) {
+                measure.update_one(known, &pred);
+            }
+        }
+
+        measure
+    }
+
+    fn run<X, Y, F>(&self, task: &Task, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&[X], &Y)>, &mut Iterator<Item=&[X]>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        let (dx, dy) = self.source_data
+            .clone_split()
+            .expect("Supervised Regression requires a target column");
+
+        let x: Vec<X> = arff::dynamic::de::from_dataset(&dx).unwrap();
+        let y: Vec<Y> = arff::dynamic::de::from_dataset(&dy).unwrap();
+
+        let mut measure = self.evaluation_measures.create();
+
+        for fold in self.estimation_procedure.iter() {
+            let mut train = fold.trainset
+                .iter()
+                .map(|&i| (&x[i * dx.n_cols() .. (i+1) * dx.n_cols()], &y[i]));
+
+            let mut test = fold.testset
+                .iter()
+                .map(|&i| &x[i * dx.n_cols() .. (i+1) * dx.n_cols()]);
+
+            let predictit = flow(&mut train, &mut test);
+
+            for (known, pred) in fold.testset.iter().map(|&i| &y[i]).zip(predictit) {
+                measure.update_one(known, &pred);
+            }
         }
 
         measure
@@ -233,6 +308,7 @@ impl TaskType for SupervisedRegression {
 }
 
 
+#[derive(Debug)]
 struct SupervisedClassification {
     source_data: DataSet,
     estimation_procedure: Procedure,
@@ -265,39 +341,70 @@ impl SupervisedClassification {
             evaluation_measures: evaluation_measures,
         }
     }
-}
 
-impl TaskType for SupervisedClassification {
-    fn perform(&self, task: &Task, flow: &Fn(arff::Array<f64>, arff::Array<f64>, arff::Array<f64>) -> Vec<f64>) -> Box<MeasureAccumulator> {
-        let (x, y) = match self.source_data.target {
-            None => {
-                let x: arff::Array<f64> = self.source_data.arff.to_array().unwrap();
-                let y = arff::Array::<f64>::empty();
-                (x, y)
-            }
+    fn run_static<X, Y, F>(&self, task: &Task, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&X, &Y)>, &mut Iterator<Item=&X>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        let (dx, dy) = self.source_data
+            .clone_split()
+            .expect("Supervised Classification requires a target column");
 
-            Some(ref col) => {
-                let data = self.source_data.arff.clone();
-                let (dx, dy) = data.split_one(col);
-
-                let x: arff::Array<f64> = dx.to_array().unwrap();
-                let y: arff::Array<f64> = dy.to_array().unwrap();
-
-                (x, y)
-            }
-        };
+        let x: Vec<X> = arff::dynamic::de::from_dataset(&dx).unwrap();
+        let y: Vec<Y> = arff::dynamic::de::from_dataset(&dy).unwrap();
 
         let mut measure = self.evaluation_measures.create();
 
         for fold in self.estimation_procedure.iter() {
-            let x_train = x.clone_rows(&fold.trainset);
-            let y_train = y.clone_rows(&fold.trainset);
-            let x_test = x.clone_rows(&fold.testset);
-            let y_test = y.clone_rows(&fold.testset);
+            let mut train = fold.trainset
+                .iter()
+                .map(|&i| (&x[i], &y[i]));
 
-            let predictions = flow(x_train, y_train, x_test);
+            let mut test = fold.testset
+                .iter()
+                .map(|&i| &x[i]);
 
-            measure.update(y_test.raw_data(), &predictions);
+            let predictit = flow(&mut train, &mut test);
+
+            for (known, pred) in fold.testset.iter().map(|&i| &y[i]).zip(predictit) {
+                measure.update_one(known, &pred);
+            }
+        }
+
+        measure
+    }
+
+    fn run<X, Y, F>(&self, task: &Task, flow: F) -> MeasureAccumulator
+    where F: Fn(&mut Iterator<Item=(&[X], &Y)>, &mut Iterator<Item=&[X]>) -> Box<Iterator<Item=Y>>,
+          X: serde::de::DeserializeOwned,
+          Y: serde::de::DeserializeOwned,
+          Y: ToPrimitive,
+    {
+        let (dx, dy) = self.source_data
+            .clone_split()
+            .expect("Supervised Classification requires a target column");
+
+        let x: Vec<X> = arff::dynamic::de::from_dataset(&dx).unwrap();
+        let y: Vec<Y> = arff::dynamic::de::from_dataset(&dy).unwrap();
+
+        let mut measure = self.evaluation_measures.create();
+
+        for fold in self.estimation_procedure.iter() {
+            let mut train = fold.trainset
+                .iter()
+                .map(|&i| (&x[i * dx.n_cols() .. (i+1) * dx.n_cols()], &y[i]));
+
+            let mut test = fold.testset
+                .iter()
+                .map(|&i| &x[i * dx.n_cols() .. (i+1) * dx.n_cols()]);
+
+            let predictit = flow(&mut train, &mut test);
+
+            for (known, pred) in fold.testset.iter().map(|&i| &y[i]).zip(predictit) {
+                measure.update_one(known, &pred);
+            }
         }
 
         measure
@@ -308,6 +415,18 @@ impl TaskType for SupervisedClassification {
 struct DataSet {
     arff: arff::dynamic::DataSet,
     target: Option<String>,
+}
+
+impl DataSet {
+    fn clone_split(&self) -> Option<(arff::dynamic::DataSet, arff::dynamic::DataSet)> {
+        match self.target {
+            None => None,
+            Some(ref col) => {
+                let data = self.arff.clone();
+                Some(data.split_one(col))
+            }
+        }
+    }
 }
 
 impl<'a> From<&'a serde_json::Value> for DataSet
@@ -485,78 +604,67 @@ impl Measure {
         }
     }
 
-    fn create(&self) -> Box<MeasureAccumulator> {
+    fn create(&self) -> MeasureAccumulator {
         match *self {
-            Measure::PredictiveAccuracy => Box::new(Accuracy::new()),
-            Measure::RootMeanSquaredError => Box::new(RootMeanSquaredError::new()),
+            Measure::PredictiveAccuracy => MeasureAccumulator::new_accuracy(),
+            Measure::RootMeanSquaredError =>  MeasureAccumulator::new_rmse(),
         }
     }
-}
-
-pub trait MeasureAccumulator: ::std::fmt::Debug {
-    fn update(&mut self, known: &[f64], predicted: &[f64]);
-    fn result(&self) -> f64;
 }
 
 #[derive(Debug)]
-struct Accuracy {
-    n_correct: f64,
-    n_wrong: f64,
-}
+pub enum MeasureAccumulator {
+    Accuracy {
+        n_correct: usize,
+        n_wrong: usize,
+    },
 
-impl Accuracy {
-    fn new() -> Self {
-        Accuracy {
-            n_correct: 0.0,
-            n_wrong: 0.0,
-        }
+    RootMeanSquaredError {
+        sum_of_squares: f64,
+        n: usize,
     }
 }
 
-impl MeasureAccumulator for Accuracy {
+impl MeasureAccumulator {
+    fn new_accuracy() -> Self { MeasureAccumulator::Accuracy { n_correct: 0, n_wrong: 0 } }
+
+    fn new_rmse() -> Self { MeasureAccumulator::RootMeanSquaredError { sum_of_squares: 0.0, n: 0 } }
+
     fn update(&mut self, known: &[f64], predicted: &[f64]) {
         for (k, p) in known.iter().zip(predicted.iter()) {
-            if k == p {
-                self.n_correct += 1.0;
-            } else {
-                self.n_wrong += 1.0;
+            self.update_one(k, p);
+        }
+    }
+
+    fn update_one<T: ToPrimitive>(&mut self, known: &T, pred: &T) {
+        match *self {
+            MeasureAccumulator::Accuracy{ref mut n_correct, ref mut n_wrong} => {
+                if known.to_i64().unwrap() == pred.to_i64().unwrap() {
+                    *n_correct += 1;
+                } else {
+                    *n_wrong += 1;
+                }
+            }
+            MeasureAccumulator::RootMeanSquaredError{ref mut sum_of_squares, ref mut n} => {
+                let diff = known.to_f64().unwrap() - pred.to_f64().unwrap();
+                *sum_of_squares += diff * diff;
+                *n += 1;
             }
         }
     }
 
-    fn result(&self) -> f64 {
-        self.n_correct / (self.n_correct + self.n_wrong)
-    }
-}
-
-#[derive(Debug)]
-struct RootMeanSquaredError {
-    sum_of_squares: f64,
-    n: usize,
-}
-
-impl RootMeanSquaredError {
-    fn new() -> Self {
-        RootMeanSquaredError {
-            sum_of_squares: 0.0,
-            n: 0,
+    fn result(&self) -> f64{
+        match *self {
+            MeasureAccumulator::Accuracy{ref n_correct, ref n_wrong} => {
+                *n_correct as f64 / (*n_correct as f64 + *n_wrong as f64)
+            }
+            MeasureAccumulator::RootMeanSquaredError{ref sum_of_squares, ref n} => {
+                (*sum_of_squares / *n as f64).sqrt()
+            }
         }
     }
 }
 
-impl MeasureAccumulator for RootMeanSquaredError {
-    fn update(&mut self, known: &[f64], predicted: &[f64]) {
-        for (k, p) in known.iter().zip(predicted.iter()) {
-            let diff = k - p;
-            self.n += 1;
-            self.sum_of_squares += diff * diff;
-        }
-    }
-
-    fn result(&self) -> f64 {
-        (self.sum_of_squares / self.n as f64).sqrt()
-    }
-}
 
 fn get_cached(url: &str) -> Result<String> {
     // todo: is there a potential race condition with a process locking the file for reading while
@@ -710,9 +818,36 @@ fn apidev() {
     let mut api = OpenML::new();
     let task = api.task(166850).unwrap();
 
-    let result = task.perform(|x_train, y_train, x_test| {
-        (0..x_test.n_rows()).map(|_| 0.0).collect()
+    println!("{:#?}", task);
+
+    let result = task.run_static(|train, test| {
+        let y_out: Vec<_> = test.map(|row: &[f64; 4]| 0).collect();
+        Box::new(y_out.into_iter())
     });
+
+    println!("{:#?}", result);
+
+    #[derive(Deserialize)]
+    struct Row {
+        sepallength: f32,
+        sepalwidth: f32,
+        petallength: f32,
+        petalwidth: f32,
+    }
+
+    let result = task.run_static(|train, test| {
+        let (x_train, y_train): (Vec<&Row>, Vec<i32>) = train.unzip();
+        let y_out: Vec<_> = test.map(|row: &Row| 0).collect();
+        Box::new(y_out.into_iter())
+    });
+
+    println!("{:#?}", result);
+
+    let result = task.run(|train, test| {
+        let y_out: Vec<_> = test.map(|row: &[f64]| 0).collect();
+        Box::new(y_out.into_iter())
+    });
+
     println!("{:#?}", result);
 }
 
@@ -730,9 +865,11 @@ fn apidev2() {
 
     let end = PreciseTime::now();
 
-    let result = task.perform(|x_train, y_train, x_test| {
-        (0..x_test.n_rows()).map(|_| 0.0).collect()
+    let result = task.run(|train, test| {
+        let y_out: Vec<_> = test.map(|row: &[u8]| 0).collect();
+        Box::new(y_out.into_iter())
     });
+
     println!("{:#?}", result);
 
     println!("loading took {} seconds.", start.to(end));
