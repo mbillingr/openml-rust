@@ -653,7 +653,7 @@ impl MeasureAccumulator {
         }
     }
 
-    fn result(&self) -> f64{
+    pub fn result(&self) -> f64{
         match *self {
             MeasureAccumulator::Accuracy{ref n_correct, ref n_wrong} => {
                 *n_correct as f64 / (*n_correct as f64 + *n_wrong as f64)
