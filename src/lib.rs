@@ -16,6 +16,7 @@ extern crate simple_logger;
 extern crate time;
 extern crate tokio_core;
 
+pub mod baseline;
 mod dataset;
 mod error;
 mod measure_accumulator;
