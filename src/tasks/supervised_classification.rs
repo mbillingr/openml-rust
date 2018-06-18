@@ -5,8 +5,6 @@ use dataset::DataSet;
 use measure_accumulator::MeasureAccumulator;
 use procedures::Procedure;
 
-use super::Task;
-
 pub struct SupervisedClassification {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -15,16 +13,16 @@ pub struct SupervisedClassification {
     //pub(crate) cost_matrix: CostMatrix,
 }
 
-impl Task for SupervisedClassification {
-    fn id(&self) -> &str {
+impl SupervisedClassification {
+    pub fn id(&self) -> &str {
         &self.id
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn run_static<X, Y, F, M>(&self, flow: F) -> M
+    pub fn run_static<X, Y, F, M>(&self, flow: F) -> M
     where
         F: Fn(&mut Iterator<Item = (&X, &Y)>, &mut Iterator<Item = &X>) -> Box<Iterator<Item = Y>>,
         X: DeserializeOwned,
@@ -55,7 +53,7 @@ impl Task for SupervisedClassification {
         measure
     }
 
-    fn run<X, Y, F, M>(&self, flow: F) -> M
+    pub fn run<X, Y, F, M>(&self, flow: F) -> M
     where
         F: Fn(&mut Iterator<Item = (&[X], &Y)>, &mut Iterator<Item = &[X]>)
             -> Box<Iterator<Item = Y>>,

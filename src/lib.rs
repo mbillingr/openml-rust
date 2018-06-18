@@ -21,10 +21,19 @@ mod error;
 mod measure_accumulator;
 mod openml_api;
 mod procedures;
-mod task;
 mod tasks;
 
-pub use tasks::{SupervisedClassification, SupervisedRegression, Task};
+pub use measure_accumulator::{
+    MeasureAccumulator,
+    PredictiveAccuracy,
+    RootMeanSquaredError
+};
+
+pub use tasks::{
+    SupervisedClassification,
+    SupervisedRegression,
+    Task
+};
 
 #[cfg(test)]
 mod tests {
@@ -41,7 +50,7 @@ mod tests {
 
         println!("{}", task.name());
 
-        let result: PredictiveAccuracy = task.run_static(|_train, test| {
+        let result: PredictiveAccuracy<_> = task.run_static(|_train, test| {
             let y_out: Vec<_> = test.map(|_row: &[f64; 4]| 0).collect();
             Box::new(y_out.into_iter())
         });
@@ -57,7 +66,7 @@ mod tests {
             petalwidth: f32,
         }
 
-        let result: PredictiveAccuracy = task.run_static(|train, test| {
+        let result: PredictiveAccuracy<_> = task.run_static(|train, test| {
             let (_x_train, _y_train): (Vec<&Row>, Vec<i32>) = train.unzip();
             let y_out: Vec<_> = test.map(|_row: &Row| 0).collect();
             Box::new(y_out.into_iter())
@@ -65,7 +74,7 @@ mod tests {
 
         println!("{:#?}", result);
 
-        let result: PredictiveAccuracy = task.run(|_train, test| {
+        let result: PredictiveAccuracy<_> = task.run(|_train, test| {
             let y_out: Vec<_> = test.map(|_row: &[f64]| 0).collect();
             Box::new(y_out.into_iter())
         });
@@ -85,7 +94,7 @@ mod tests {
 
         let end = PreciseTime::now();
 
-        let result: PredictiveAccuracy = task.run(|_train, test| {
+        let result: PredictiveAccuracy<_> = task.run(|_train, test| {
             let y_out: Vec<_> = test.map(|_row: &[u8]| 0).collect();
             Box::new(y_out.into_iter())
         });
