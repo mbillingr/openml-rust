@@ -2,6 +2,7 @@ use std::io::Error as IoError;
 use std::result::Result as StdResult;
 use std::string::FromUtf8Error;
 
+use app_dirs::AppDirsError;
 use arff::Error as ArffError;
 use hyper::Error as HyperError;
 use hyper::error::UriError;
@@ -19,6 +20,7 @@ pub enum Error {
     HyperTlsError(TlsError),
     JsonError(JsonError),
     ArffError(ArffError),
+    AppDirsError(AppDirsError),
 }
 
 impl From<IoError> for Error {
@@ -60,5 +62,14 @@ impl From<JsonError> for Error {
 impl From<ArffError> for Error {
     fn from(e: ArffError) -> Self {
         Error::ArffError(e)
+    }
+}
+
+impl From<AppDirsError> for Error {
+    fn from(e: AppDirsError) -> Self {
+        match e {
+            AppDirsError::Io(e) => Error::IoError(e),
+            _ => Error::AppDirsError(e)
+        }
     }
 }

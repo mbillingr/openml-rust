@@ -7,6 +7,7 @@ authors = ["Martin Billinger <flkazemakase@gmail.com>"]
 simple_logger = "0.5"
 
 [dependencies]
+app_dirs = "1.2.1"
 arff = { path = "../arff" }
 fs2 = "*"
 futures = "0.1"

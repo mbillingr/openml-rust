@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::path::Path;
 
+use app_dirs::{app_root, AppDataType, AppInfo};
 use futures::{Future, Stream};
 use hyper::Client;
 use hyper_tls::HttpsConnector;
@@ -11,14 +11,19 @@ use error::Result;
 
 use super::file_lock::{ExclusiveLock, SharedLock};
 
+const APP_INFO: AppInfo = AppInfo{name: "openml-rust", author: "openml-rust"};
+
 pub fn get_cached(url: &str) -> Result<String> {
     // todo: is there a potential race condition with a process locking the file for reading while
     //       the writer has created but not yet locked the file?
-    let filename = "cache/".to_owned() + &url_to_file(url);
-    let path = Path::new(&filename);
+
+    let mut path = app_root(AppDataType::UserCache, &APP_INFO)?;
+    path.push(url_to_file(url));
+
+    println!("{:?}", path);
 
     loop {
-        match File::open(path) {
+        match File::open(&path) {
             Ok(f) => {
                 info!("Loading cached {}", url);
                 let mut file = SharedLock::new(f)?;
@@ -29,7 +34,7 @@ pub fn get_cached(url: &str) -> Result<String> {
             Err(_) => {}
         }
 
-        match OpenOptions::new().create_new(true).write(true).open(path) {
+        match OpenOptions::new().create_new(true).write(true).open(&path) {
             Err(e) => {
                 // todo: is this the correct io error raised if another thread has locked the file currently?
                 if let io::ErrorKind::PermissionDenied = e.kind() {

@@ -1,3 +1,4 @@
+extern crate app_dirs;
 extern crate arff;
 extern crate fs2;
 extern crate futures;
