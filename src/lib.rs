@@ -89,12 +89,12 @@ mod tests {
         let result: PredictiveAccuracy<_> = task.run(|train, test| {
             // train classifier
             let nbc: NaiveBayesClassifier<u8> = train
-                .map(|(x, y)| (x.iter().map(|xi| *xi), *y))
+                .map(|(x, y)| (x, y))
                 .collect();
 
             // test classifier
             let y_out: Vec<_> = test
-                .map(|x| *nbc.predict(x))
+                .map(|x| nbc.predict(x))
                 .collect();
 
             Box::new(y_out.into_iter())

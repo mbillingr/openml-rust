@@ -24,21 +24,21 @@ struct UniformNormalDistribution {
     n: usize
 }
 
-impl<C, J> FromIterator<(J, C)> for NaiveBayesClassifier<C>
+impl<'a, C: 'a, J> FromIterator<(J, &'a C)> for NaiveBayesClassifier<C>
 where
-    J: IntoIterator<Item=f64>,
-    C: Eq + Hash,
+    J: IntoIterator<Item=&'a f64>,
+    C: Eq + Hash + Copy,
 {
-    fn from_iter<I: IntoIterator<Item=(J, C)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item=(J, &'a C)>>(iter: I) -> Self {
         let mut class_distributions = HashMap::new();
 
-        for (x, y) in iter {
+        for (x, &y) in iter {
             let distributions = &mut class_distributions
                 .entry(y)
                 .or_insert(FeatureDistribution::new())
                 .distributions;
 
-            for (i, xi) in x.into_iter().enumerate() {
+            for (i, &xi) in x.into_iter().enumerate() {
                 if i >= distributions.len() {
                     distributions.resize(1 + i, UniformNormalDistribution::new());
                 }
@@ -54,9 +54,9 @@ where
 }
 
 impl<C> NaiveBayesClassifier<C>
-where  C: Eq + Hash,
+where  C: Eq + Hash + Copy,
 {
-    pub fn predict(&self, x: &[f64]) -> &C {
+    pub fn predict(&self, x: &[f64]) -> C {
         self.class_distributions
             .iter()
             .map(|(c, dists)| {
@@ -75,7 +75,7 @@ where  C: Eq + Hash,
                     Ordering::Less
                 }
             })
-            .map(|(c, _)| c)
+            .map(|(&c, _)| c)
             .unwrap()
     }
 }
@@ -135,16 +135,11 @@ fn nbc() {
 
     let nbc: NaiveBayesClassifier<_> = data
         .iter()
-        .map(|(x, y)| {
-            (
-                x.iter().map(|xi| *xi),
-                *y
-            )
-        })
+        .map(|(x, y)| (x, y))
         .collect();
 
-    assert_eq!(*nbc.predict(&[1.5, 1.5]), 'A');
-    assert_eq!(*nbc.predict(&[5.5, 1.5]), 'A');
-    assert_eq!(*nbc.predict(&[1.5, 5.5]), 'B');
-    assert_eq!(*nbc.predict(&[5.5, 5.5]), 'B');
+    assert_eq!(nbc.predict(&[1.5, 1.5]), 'A');
+    assert_eq!(nbc.predict(&[5.5, 1.5]), 'A');
+    assert_eq!(nbc.predict(&[1.5, 5.5]), 'B');
+    assert_eq!(nbc.predict(&[5.5, 5.5]), 'B');
 }
