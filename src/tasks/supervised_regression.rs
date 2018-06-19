@@ -6,11 +6,21 @@ use measure_accumulator::MeasureAccumulator;
 use procedures::Procedure;
 
 pub struct SupervisedRegression {
+    pub(crate) id: String,
+    pub(crate) name: String,
     pub(crate) source_data: DataSet,
     pub(crate) estimation_procedure: Box<Procedure>,
 }
 
 impl SupervisedRegression {
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn run_static<X, Y, F, M>(&self, flow: F) -> M
     where
         F: Fn(&mut Iterator<Item = (&X, &Y)>, &mut Iterator<Item = &X>) -> Box<Iterator<Item = Y>>,

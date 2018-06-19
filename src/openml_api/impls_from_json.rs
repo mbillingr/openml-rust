@@ -67,12 +67,11 @@ impl SupervisedClassification {
 }
 
 impl SupervisedRegression {
-    pub fn from_json(input_json: &Vec<serde_json::Value>) -> Self {
+    pub fn from_json(task_json: &serde_json::Value) -> Self {
         let mut source_data = None;
         let mut estimation_procedure = None;
-        //let mut evaluation_measures = None;
 
-        for input_item in input_json {
+        for input_item in task_json["input"].as_array().unwrap() {
             match input_item["name"].as_str() {
                 Some("source_data") => source_data = Some(DataSet::from_json(input_item)),
                 Some("estimation_procedure") => {
@@ -84,6 +83,8 @@ impl SupervisedRegression {
         }
 
         SupervisedRegression {
+            id: task_json["task_id"].as_str().unwrap().to_owned(),
+            name: task_json["task_name"].as_str().unwrap().to_owned(),
             source_data: source_data.unwrap(),
             estimation_procedure: estimation_procedure.unwrap(),
         }
