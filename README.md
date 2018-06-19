@@ -15,8 +15,8 @@ use openml::{PredictiveAccuracy, SupervisedClassification};
 use openml::baseline::NaiveBayesClassifier;
 
 fn main() {
-    // Load "Supervised Classification on iris" task (https://www.openml.org/t/166850)
-    let task = SupervisedClassification::from_openml(166850).unwrap();
+    // Load "Supervised Classification on iris" task (https://www.openml.org/t/59)
+    let task = SupervisedClassification::from_openml(59).unwrap();
 
     println!("Task: {}", task.name());
 
