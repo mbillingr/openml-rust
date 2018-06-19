@@ -5,6 +5,40 @@ The aim of this crate is to give rust code access to Machine Learning data hoste
 Thus, Machine Learning algorithms developed in Rust can be easily applied to state-of-the-art
 data sets and their performance compared to existing implementations in a reproducable way.
 
+## Example
+
+```rust
+extern crate openml;
+
+use openml::prelude::*;
+use openml::{PredictiveAccuracy, SupervisedClassification};
+use openml::baseline::NaiveBayesClassifier;
+
+fn main() {
+    // Load "Supervised Classification on iris" task (https://www.openml.org/t/166850)
+    let task = SupervisedClassification::from_openml(166850).unwrap();
+
+    println!("Task: {}", task.name());
+
+    // run the task
+    let result: PredictiveAccuracy<_> = task.run(|train, test| {
+        // train classifier
+        let nbc: NaiveBayesClassifier<u8> = train
+            .map(|(x, y)| (x, y))
+            .collect();
+
+        // test classifier
+        let y_out: Vec<_> = test
+            .map(|x| nbc.predict(x))
+            .collect();
+
+        Box::new(y_out.into_iter())
+    });
+
+    println!("Classification Accuracy: {}", result.result());
+}
+```
+
 ## Goals
 - [x] get data sets
 - [x] get tasks
