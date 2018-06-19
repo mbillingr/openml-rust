@@ -42,6 +42,7 @@ mod tests {
     use log::Level;
     use time::PreciseTime;
 
+    use baseline::NaiveBayesClassifier;
     use measure_accumulator::PredictiveAccuracy;
 
     use super::*;
@@ -76,8 +77,17 @@ mod tests {
 
         println!("{:#?}", result);
 
-        let result: PredictiveAccuracy<_> = task.run(|_train, test| {
-            let y_out: Vec<_> = test.map(|_row: &[f64]| 0).collect();
+        let result: PredictiveAccuracy<_> = task.run(|train, test| {
+            // train classifier
+            let nbc: NaiveBayesClassifier<u8> = train
+                .map(|(x, y)| (x.iter().map(|xi| *xi), *y))
+                .collect();
+
+            // test classifier
+            let y_out: Vec<_> = test
+                .map(|x| *nbc.predict(x))
+                .collect();
+
             Box::new(y_out.into_iter())
         });
 
