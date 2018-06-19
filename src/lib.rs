@@ -1,3 +1,11 @@
+//! # openml-rust
+//!
+//! ## Example
+//!
+//! ```rust
+//!
+//! ```
+
 extern crate app_dirs;
 extern crate arff;
 extern crate fs2;
@@ -22,6 +30,7 @@ mod dataset;
 mod error;
 mod measure_accumulator;
 mod openml_api;
+pub mod prelude;
 mod procedures;
 mod tasks;
 
