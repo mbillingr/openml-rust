@@ -20,8 +20,6 @@ pub fn get_cached(url: &str) -> Result<String> {
     let mut path = app_root(AppDataType::UserCache, &APP_INFO)?;
     path.push(url_to_file(url));
 
-    println!("{:?}", path);
-
     loop {
         match File::open(&path) {
             Ok(f) => {
