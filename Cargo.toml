@@ -3,13 +3,22 @@ name = "openml"
 version = "0.1.0"
 authors = ["Martin Billinger <flkazemakase@gmail.com>"]
 
+description = "A rust interface to [OpenML](http://openml.org/)."
+keywords = ["machine learning", "openml", "data", "dataset"]
+categories = ["science"]
+
+repository = "https://github.com/mbillingr/openml-rust"
+readme = "README.md"
+
+license = "MIT/Apache-2.0"
+
 [dev-dependencies]
 simple_logger = "0.5"
 
 [dependencies]
 app_dirs = "1.2.1"
-arff = { path = "../arff" }
-fs2 = "*"
+arff = "0.3"
+fs2 = "0.4.3"
 futures = "0.1"
 hyper = "0.11"
 hyper-tls = "0.1"
@@ -19,5 +28,5 @@ num-traits = "0.2"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-time = "*"
+time = "0.1"
 tokio-core = "0.1"
