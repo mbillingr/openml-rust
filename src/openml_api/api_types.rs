@@ -1,5 +1,6 @@
 use serde_json;
 
+/// Generic JSON response as returned by the OpenML API
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenericResponse(serde_json::Value);
 
@@ -10,8 +11,9 @@ impl GenericResponse {
     }
 }
 
+/// A row in a split file
 #[derive(Debug, Deserialize)]
-pub struct CrossValItem {
+pub(crate) struct CrossValItem {
     #[serde(rename = "type")]
     pub purpose: TrainTest,
 
@@ -23,7 +25,7 @@ pub struct CrossValItem {
 }
 
 #[derive(Debug, Deserialize)]
-pub enum TrainTest {
+pub(crate) enum TrainTest {
     #[serde(rename = "TRAIN")]
     Train,
 
@@ -31,6 +33,7 @@ pub enum TrainTest {
     Test,
 }
 
+/// Cost matrix, used by some classification tasks - currently UNIMPLEMENTED
 #[derive(Debug)]
 pub(crate) enum CostMatrix {
     None,

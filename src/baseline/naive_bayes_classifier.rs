@@ -1,3 +1,5 @@
+//! Implementation of a Gaussian Naive Bayes Classifier
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::f64;
@@ -5,6 +7,14 @@ use std::fmt;
 use std::hash::Hash;
 use std::iter::FromIterator;
 
+/// A Gaussian Naive Bayes Classifier
+///
+/// The classifier is trained by consuming an iterator over the training data:
+/// ```
+/// let nbc: NaiveBayesClassifier<_> = data
+///     .iter()
+///     .collect();
+/// ```
 #[derive(Debug)]
 pub struct NaiveBayesClassifier<C>
 where C: Eq + Hash
@@ -12,13 +22,15 @@ where C: Eq + Hash
     class_distributions: HashMap<C, FeatureDistribution>,
 }
 
+/// Distribution of each feature column
 #[derive(Debug, Clone)]
 struct FeatureDistribution {
-    distributions: Vec<UniformNormalDistribution>
+    distributions: Vec<NormalDistribution>
 }
 
+/// Univariate Normal Distribution
 #[derive(Copy, Clone)]
-struct UniformNormalDistribution {
+struct NormalDistribution {
     sum: f64,
     sqsum: f64,
     n: usize
@@ -40,7 +52,7 @@ where
 
             for (i, &xi) in x.into_iter().enumerate() {
                 if i >= distributions.len() {
-                    distributions.resize(1 + i, UniformNormalDistribution::new());
+                    distributions.resize(1 + i, NormalDistribution::new());
                 }
 
                 distributions[i].update(xi);
@@ -56,6 +68,7 @@ where
 impl<C> NaiveBayesClassifier<C>
 where  C: Eq + Hash + Copy,
 {
+    /// predict target class for a single feature vector
     pub fn predict(&self, x: &[f64]) -> C {
         self.class_distributions
             .iter()
@@ -88,9 +101,9 @@ impl FeatureDistribution {
     }
 }
 
-impl UniformNormalDistribution {
+impl NormalDistribution {
     fn new() -> Self {
-        UniformNormalDistribution {
+        NormalDistribution {
             sum: 0.0,
             sqsum: 0.0,
             n: 0
@@ -120,7 +133,7 @@ impl UniformNormalDistribution {
     }
 }
 
-impl fmt::Debug for UniformNormalDistribution {
+impl fmt::Debug for NormalDistribution {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "N{{{}; {}}}", self.mean(), self.variance())
     }

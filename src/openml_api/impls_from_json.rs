@@ -1,3 +1,4 @@
+//! implementations to convert the API's JSON responses into corresponding Rust structures
 use arff;
 use arff::dynamic::DataSet as ArffDataSet;
 use serde_json;

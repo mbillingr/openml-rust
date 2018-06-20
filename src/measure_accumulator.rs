@@ -1,11 +1,21 @@
+//! Measure accumulators are summaries of model performance, such as classification accuracy or
+//! regression error.
+
 use std::marker::PhantomData;
 use num_traits::AsPrimitive;
 
+/// Trait implemented by performance measures
 pub trait MeasureAccumulator<T> {
+    /// initialize new measure
     fn new() -> Self;
+
+    /// update with one prediction
     fn update_one(&mut self, known: &T, pred: &T);
+
+    /// get resulting performance
     fn result(&self) -> f64;
 
+    /// update with multiple predictions
     fn update<I: Iterator<Item = T>>(&mut self, known: I, predicted: I) {
         for (k, p) in known.zip(predicted) {
             self.update_one(&k, &p)
@@ -13,6 +23,7 @@ pub trait MeasureAccumulator<T> {
     }
 }
 
+/// Classification Accuracy: relative amount of correctly classified labels
 #[derive(Debug)]
 pub struct PredictiveAccuracy<T> {
     n_correct: usize,
@@ -45,6 +56,7 @@ where
     }
 }
 
+/// Root Mean Squared Error
 #[derive(Debug)]
 pub struct RootMeanSquaredError<T> {
     sum_of_squares: f64,

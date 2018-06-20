@@ -1,3 +1,5 @@
+//! Access the OpenML REST API
+
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 
@@ -13,6 +15,7 @@ use super::file_lock::{ExclusiveLock, SharedLock};
 
 const APP_INFO: AppInfo = AppInfo{name: "openml-rust", author: "openml-rust"};
 
+/// Query a URL. If possible read the response from local cache
 pub fn get_cached(url: &str) -> Result<String> {
     // todo: is there a potential race condition with a process locking the file for reading while
     //       the writer has created but not yet locked the file?
@@ -52,6 +55,7 @@ pub fn get_cached(url: &str) -> Result<String> {
     }
 }
 
+/// Query a URL.
 fn download(url: &str) -> Result<String> {
     let mut core = Core::new()?;
     let handle = core.handle();
@@ -75,6 +79,7 @@ fn download(url: &str) -> Result<String> {
     Ok(result)
 }
 
+/// Convert URL to file name for chching
 fn url_to_file(s: &str) -> String {
     s.replace('/', "_").replace(':', "")
 }

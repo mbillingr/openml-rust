@@ -1,5 +1,6 @@
 use super::{Fold, Procedure};
 
+/// pre-defined cross-validation
 #[derive(Debug)]
 pub(crate) struct FrozenSets {
     pub(crate) folds: Vec<Vec<Fold>>,

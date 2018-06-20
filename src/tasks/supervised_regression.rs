@@ -5,6 +5,7 @@ use dataset::DataSet;
 use measure_accumulator::MeasureAccumulator;
 use procedures::Procedure;
 
+/// Regression task
 pub struct SupervisedRegression {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -13,14 +14,19 @@ pub struct SupervisedRegression {
 }
 
 impl SupervisedRegression {
+    /// get task ID
     pub fn id(&self) -> &str {
         &self.id
     }
 
+    /// get task name
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// run task, specifying the type of an entire feature column in `X`. This allows to run
+    /// machine learning models that take features of different types, or named features in form
+    /// of structs.
     pub fn run_static<X, Y, F, M>(&self, flow: F) -> M
     where
         F: Fn(&mut Iterator<Item = (&X, &Y)>, &mut Iterator<Item = &X>) -> Box<Iterator<Item = Y>>,
@@ -52,6 +58,8 @@ impl SupervisedRegression {
         measure
     }
 
+    /// run task, specifying the feature type in `X`. This allows to run machine learning models
+    /// that expect every feature to have the same type.
     pub fn run<X, Y, F, M>(&self, flow: F) -> M
     where
         F: Fn(&mut Iterator<Item = (&[X], &Y)>, &mut Iterator<Item = &[X]>)

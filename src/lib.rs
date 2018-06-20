@@ -1,5 +1,8 @@
 //! # openml-rust
 //!
+//! The openml crate provides functions to fetch tasks and data sets from https://openml.org, and
+//! run them with machine learning models.
+//!
 //! ## Example
 //!
 //! ```rust

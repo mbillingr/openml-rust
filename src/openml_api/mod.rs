@@ -1,3 +1,5 @@
+//! Cached access to the OpenML REST API
+
 mod api_types;
 mod file_lock;
 mod impls_from_json;
