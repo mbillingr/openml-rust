@@ -56,6 +56,7 @@ fn main() {
     - <s>b: cast everything to f64</s>
     - <s>c: make type casting part of the feature extraction pipeline</s>
     - Generics allow type selection at compile time
+- [ ] make openml.org optional (manual construction of tasks)
     
   
 ## Future Maybe-Goals
