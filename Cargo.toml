@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Martin Billinger <flkazemakase@gmail.com>"]
 
 description = "A rust interface to [OpenML](http://openml.org/)."
-keywords = ["machine learning", "openml", "data", "dataset"]
+keywords = ["machine-learning", "openml", "data", "dataset"]
 categories = ["science"]
 
 repository = "https://github.com/mbillingr/openml-rust"
