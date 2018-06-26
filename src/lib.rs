@@ -45,7 +45,6 @@ extern crate hyper;
 extern crate hyper_tls;
 #[macro_use]
 extern crate log;
-extern crate ndarray;
 extern crate num_traits;
 extern crate serde;
 #[macro_use]
@@ -53,6 +52,7 @@ extern crate serde_derive;
 extern crate serde_json;
 #[cfg(test)]
 extern crate simple_logger;
+#[cfg(test)]
 extern crate time;
 extern crate tokio_core;
 
