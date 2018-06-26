@@ -11,8 +11,10 @@ use std::iter::FromIterator;
 ///
 /// The classifier is trained by consuming an iterator over the training data:
 /// ```
+/// # use openml::baseline::NaiveBayesClassifier;
+/// # let data: Vec<(&[f64], &u8)> = vec![];
 /// let nbc: NaiveBayesClassifier<_> = data
-///     .iter()
+///     .into_iter()
 ///     .collect();
 /// ```
 #[derive(Debug)]
