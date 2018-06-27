@@ -16,7 +16,7 @@ pub trait Id {
 impl Id for String {
     #[inline(always)]
     fn as_string(&self) -> Cow<str> {
-        Cow::from(self.as_ref())
+        Cow::from(self.as_str())
     }
 
     #[inline(always)]
