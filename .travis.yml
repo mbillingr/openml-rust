@@ -1,0 +1,21 @@
+language: rust
+rust:
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+  
+cache: cargo
+
+# Taken from Trust
+before_cache:
+  # Travis can't cache files that are not readable by "others"
+  - chmod -R a+r $HOME/.cargo
+
+# Only check that the project builds. Do not run tests to avoid
+# straining the openml server
+script:
+  - cargo build --verbose --all
