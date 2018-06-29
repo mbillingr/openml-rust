@@ -42,20 +42,15 @@ fn main() {
 ## Goals
 - [x] get data sets
 - [x] get tasks
-- [x] get splits
+  - Runtime check panics if the wrong task type is loaded (`SupervisedRegression` attempts to load a Clustering Task)
+- [x] get split sets
 - [ ] task types
   - [x] Supervised Classification
   - [x] Supervised Regression
   - [ ] Learning Curve
   - [ ] Clustering
-- [x] run tasks
-  - <s>[ ] Learner/Predictor trait for use with tasks</s>
-  - [x] Task runner takes a closure for learning and prediction
-  - [x] Data type strategy:
-    - <s>a: burden the ML model with figuring out how to deal with dynamic types</s>
-    - <s>b: cast everything to f64</s>
-    - <s>c: make type casting part of the feature extraction pipeline</s>
-    - Generics allow type selection at compile time
+- [x] run tasks 
+  - runner takes a closure where the user defines learning and prediction
 - [ ] make openml.org optional (manual construction of tasks)
     
   
