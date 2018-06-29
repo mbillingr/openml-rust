@@ -101,3 +101,39 @@ impl NaiveLinearRegression
         self.intercept + x[self.feature] * self.slope
     }
 }
+
+#[test]
+fn nbc_flat() {
+    let data = vec![(vec![1.0, 2.0], 3.0),
+                    (vec![2.0, 1.0], 3.0),
+                    (vec![1.0, 5.0], 3.0),
+                    (vec![2.0, 6.0], 3.0)];
+
+    let nlr: NaiveLinearRegression = data
+        .iter()
+        .map(|(x, y)| (x, y))
+        .collect();
+
+    assert_eq!(nlr.predict(&[1.5, 1.5]), 3.0);
+    assert_eq!(nlr.predict(&[5.5, 1.5]), 3.0);
+    assert_eq!(nlr.predict(&[1.5, 5.5]), 3.0);
+    assert_eq!(nlr.predict(&[5.5, 5.5]), 3.0);
+}
+
+#[test]
+fn nbc_slope() {
+    let data = vec![(vec![1.0, 2.0], 8.0),
+                    (vec![2.0, 1.0], 9.0),
+                    (vec![1.0, 5.0], 5.0),
+                    (vec![2.0, 6.0], 4.0)];
+
+    let nlr: NaiveLinearRegression = data
+        .iter()
+        .map(|(x, y)| (x, y))
+        .collect();
+
+    assert_eq!(nlr.predict(&[1.5, 1.5]), 8.5);
+    assert_eq!(nlr.predict(&[5.5, 1.5]), 8.5);
+    assert_eq!(nlr.predict(&[1.5, 5.5]), 4.5);
+    assert_eq!(nlr.predict(&[5.5, 5.5]), 4.5);
+}
