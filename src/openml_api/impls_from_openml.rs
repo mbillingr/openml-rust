@@ -1,12 +1,12 @@
 //! implementations to load tasks from the OpenML API.
 use serde_json;
 
-use error::Result;
-use tasks::{SupervisedClassification, SupervisedRegression};
+use crate::error::Result;
+use crate::tasks::{SupervisedClassification, SupervisedRegression};
 
-use super::Id;
 use super::api_types::GenericResponse;
 use super::web_access::get_cached;
+use super::Id;
 
 impl SupervisedClassification {
     pub fn from_openml<'a, T: Id>(id: T) -> Result<Self> {
@@ -19,7 +19,7 @@ impl SupervisedClassification {
         match response.look_up("/task/task_type_id").unwrap().as_str() {
             Some("1") => Ok(SupervisedClassification::from_json(task)),
             Some(id) => panic!("Wrong task type ID. Expected \"1\" but got \"{}\"", id),
-            None => panic!("Invalid task type ID")
+            None => panic!("Invalid task type ID"),
         }
     }
 }
@@ -35,7 +35,7 @@ impl SupervisedRegression {
         match response.look_up("/task/task_type_id").unwrap().as_str() {
             Some("2") => Ok(SupervisedRegression::from_json(task)),
             Some(id) => panic!("Wrong task type ID. Expected \"2\" but got \"{}\"", id),
-            None => panic!("Invalid task type ID")
+            None => panic!("Invalid task type ID"),
         }
     }
 }

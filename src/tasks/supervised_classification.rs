@@ -1,9 +1,9 @@
 use arff::dynamic::de::from_dataset;
 use serde::de::DeserializeOwned;
 
-use dataset::DataSet;
-use measure_accumulator::MeasureAccumulator;
-use procedures::Procedure;
+use crate::dataset::DataSet;
+use crate::measure_accumulator::MeasureAccumulator;
+use crate::procedures::Procedure;
 
 /// Classification task
 pub struct SupervisedClassification {
@@ -35,7 +35,8 @@ impl SupervisedClassification {
         Y: DeserializeOwned,
         M: MeasureAccumulator<Y>,
     {
-        let (dx, dy) = self.source_data
+        let (dx, dy) = self
+            .source_data
             .clone_split()
             .expect("Supervised Classification requires a target column");
 
@@ -63,13 +64,16 @@ impl SupervisedClassification {
     /// that expect every feature to have the same type.
     pub fn run<X, Y, F, M>(&self, flow: F) -> M
     where
-        F: Fn(&mut Iterator<Item = (&[X], &Y)>, &mut Iterator<Item = &[X]>)
-            -> Box<Iterator<Item = Y>>,
+        F: Fn(
+            &mut Iterator<Item = (&[X], &Y)>,
+            &mut Iterator<Item = &[X]>,
+        ) -> Box<Iterator<Item = Y>>,
         X: DeserializeOwned,
         Y: DeserializeOwned,
         M: MeasureAccumulator<Y>,
     {
-        let (dx, dy) = self.source_data
+        let (dx, dy) = self
+            .source_data
             .clone_split()
             .expect("Supervised Classification requires a target column");
 
@@ -79,11 +83,13 @@ impl SupervisedClassification {
         let mut measure = M::new();
 
         for fold in self.estimation_procedure.iter() {
-            let mut train = fold.trainset
+            let mut train = fold
+                .trainset
                 .iter()
                 .map(|&i| (&x[i * dx.n_cols()..(i + 1) * dx.n_cols()], &y[i]));
 
-            let mut test = fold.testset
+            let mut test = fold
+                .testset
                 .iter()
                 .map(|&i| &x[i * dx.n_cols()..(i + 1) * dx.n_cols()]);
 

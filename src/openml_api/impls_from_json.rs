@@ -3,10 +3,10 @@ use arff;
 use arff::dynamic::DataSet as ArffDataSet;
 use serde_json;
 
-use dataset::DataSet;
-use error::Result;
-use procedures::{Fold, FrozenSets};
-use tasks::{SupervisedClassification, SupervisedRegression};
+use crate::dataset::DataSet;
+use crate::error::Result;
+use crate::procedures::{Fold, FrozenSets};
+use crate::tasks::{SupervisedClassification, SupervisedRegression};
 
 use super::api_types::{CrossValItem, GenericResponse, TrainTest};
 use super::web_access::get_cached;
@@ -20,7 +20,8 @@ impl DataSet {
         let info_url = format!("https://www.openml.org/api/v1/json/data/{}", id);
         let info: GenericResponse = serde_json::from_str(&get_cached(&info_url).unwrap()).unwrap();
 
-        let default_target = info.look_up("/data_set_description/default_target_attribute")
+        let default_target = info
+            .look_up("/data_set_description/default_target_attribute")
             .and_then(|v| v.as_str());
 
         let target = match (default_target, target) {
@@ -28,7 +29,8 @@ impl DataSet {
             (None, None) => None,
         };
 
-        let dset_url = info.look_up("/data_set_description/url")
+        let dset_url = info
+            .look_up("/data_set_description/url")
             .unwrap()
             .as_str()
             .unwrap();
@@ -113,12 +115,12 @@ impl FrozenSets {
             if item.repeat >= folds.len() {
                 folds.resize(item.repeat + 1, vec![]);
             }
-            let mut rep = &mut folds[item.repeat];
+            let rep = &mut folds[item.repeat];
 
             if item.fold >= rep.len() {
                 rep.resize(item.fold + 1, Fold::new());
             }
-            let mut fold = &mut rep[item.fold];
+            let fold = &mut rep[item.fold];
 
             match item.purpose {
                 TrainTest::Train => fold.trainset.push(item.rowid),

@@ -1,8 +1,8 @@
 extern crate openml;
 
+use openml::baseline::NaiveBayesClassifier;
 use openml::prelude::*;
 use openml::{PredictiveAccuracy, SupervisedClassification};
-use openml::baseline::NaiveBayesClassifier;
 
 fn main() {
     // Load "Supervised Classification on iris" task (https://www.openml.org/t/59)
@@ -13,14 +13,10 @@ fn main() {
     // run the task
     let result: PredictiveAccuracy<_> = task.run(|train, test| {
         // train classifier
-        let nbc: NaiveBayesClassifier<u8> = train
-            .map(|(x, y)| (x, y))
-            .collect();
+        let nbc: NaiveBayesClassifier<u8> = train.map(|(x, y)| (x, y)).collect();
 
         // test classifier
-        let y_out: Vec<_> = test
-            .map(|x| nbc.predict(x))
-            .collect();
+        let y_out: Vec<_> = test.map(|x| nbc.predict(x)).collect();
 
         Box::new(y_out.into_iter())
     });

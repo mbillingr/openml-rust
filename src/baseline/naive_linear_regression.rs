@@ -15,18 +15,17 @@ use std::iter::FromIterator;
 ///     .collect();
 /// ```
 #[derive(Debug)]
-pub struct NaiveLinearRegression
-{
+pub struct NaiveLinearRegression {
     slope: f64,
     intercept: f64,
     feature: usize,
 }
 
 impl<'a, J> FromIterator<(J, &'a f64)> for NaiveLinearRegression
-    where
-        J: IntoIterator<Item=&'a f64>,
+where
+    J: IntoIterator<Item = &'a f64>,
 {
-    fn from_iter<I: IntoIterator<Item=(J, &'a f64)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = (J, &'a f64)>>(iter: I) -> Self {
         let mut feature_columns = Vec::new();
         let mut target_column = Vec::new();
 
@@ -72,7 +71,8 @@ impl<'a, J> FromIterator<(J, &'a f64)> for NaiveLinearRegression
             let slope = covar / x_var;
             let intercept = y_mean - slope * x_mean;
 
-            let err: f64 = feature.iter()
+            let err: f64 = feature
+                .iter()
                 .zip(target_column.iter())
                 .map(|(&x, &y)| intercept + slope * x - y)
                 .map(|r| r * r)
@@ -94,8 +94,7 @@ impl<'a, J> FromIterator<(J, &'a f64)> for NaiveLinearRegression
     }
 }
 
-impl NaiveLinearRegression
-{
+impl NaiveLinearRegression {
     /// predict target value for a single feature vector
     pub fn predict(&self, x: &[f64]) -> f64 {
         self.intercept + x[self.feature] * self.slope
@@ -104,15 +103,14 @@ impl NaiveLinearRegression
 
 #[test]
 fn nbc_flat() {
-    let data = vec![(vec![1.0, 2.0], 3.0),
-                    (vec![2.0, 1.0], 3.0),
-                    (vec![1.0, 5.0], 3.0),
-                    (vec![2.0, 6.0], 3.0)];
+    let data = vec![
+        (vec![1.0, 2.0], 3.0),
+        (vec![2.0, 1.0], 3.0),
+        (vec![1.0, 5.0], 3.0),
+        (vec![2.0, 6.0], 3.0),
+    ];
 
-    let nlr: NaiveLinearRegression = data
-        .iter()
-        .map(|(x, y)| (x, y))
-        .collect();
+    let nlr: NaiveLinearRegression = data.iter().map(|(x, y)| (x, y)).collect();
 
     assert_eq!(nlr.predict(&[1.5, 1.5]), 3.0);
     assert_eq!(nlr.predict(&[5.5, 1.5]), 3.0);
@@ -122,15 +120,14 @@ fn nbc_flat() {
 
 #[test]
 fn nbc_slope() {
-    let data = vec![(vec![1.0, 2.0], 8.0),
-                    (vec![2.0, 1.0], 9.0),
-                    (vec![1.0, 5.0], 5.0),
-                    (vec![2.0, 6.0], 4.0)];
+    let data = vec![
+        (vec![1.0, 2.0], 8.0),
+        (vec![2.0, 1.0], 9.0),
+        (vec![1.0, 5.0], 5.0),
+        (vec![2.0, 6.0], 4.0),
+    ];
 
-    let nlr: NaiveLinearRegression = data
-        .iter()
-        .map(|(x, y)| (x, y))
-        .collect();
+    let nlr: NaiveLinearRegression = data.iter().map(|(x, y)| (x, y)).collect();
 
     assert_eq!(nlr.predict(&[1.5, 1.5]), 8.5);
     assert_eq!(nlr.predict(&[5.5, 1.5]), 8.5);
