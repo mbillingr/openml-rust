@@ -40,9 +40,7 @@
 extern crate app_dirs;
 extern crate arff;
 extern crate fs2;
-extern crate futures;
-extern crate hyper;
-extern crate hyper_tls;
+extern crate reqwest;
 #[macro_use]
 extern crate log;
 extern crate num_traits;
@@ -54,7 +52,6 @@ extern crate serde_json;
 extern crate simple_logger;
 #[cfg(test)]
 extern crate time;
-extern crate tokio_core;
 
 pub mod baseline;
 mod dataset;

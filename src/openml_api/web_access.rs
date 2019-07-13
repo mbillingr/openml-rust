@@ -4,16 +4,15 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 
 use app_dirs::{app_root, AppDataType, AppInfo};
-use futures::{Future, Stream};
-use hyper::Client;
-use hyper_tls::HttpsConnector;
-use tokio_core::reactor::Core;
 
 use error::Result;
 
 use super::file_lock::{ExclusiveLock, SharedLock};
 
-const APP_INFO: AppInfo = AppInfo{name: "openml-rust", author: "openml-rust"};
+const APP_INFO: AppInfo = AppInfo {
+    name: "openml-rust",
+    author: "openml-rust",
+};
 
 /// Query a URL. If possible read the response from local cache
 pub fn get_cached(url: &str) -> Result<String> {
@@ -57,26 +56,7 @@ pub fn get_cached(url: &str) -> Result<String> {
 
 /// Query a URL.
 fn download(url: &str) -> Result<String> {
-    let mut core = Core::new()?;
-    let handle = core.handle();
-    let client = Client::configure()
-        .connector(HttpsConnector::new(4, &handle)?)
-        .build(&handle);
-
-    let req = client.get(url.parse()?);
-
-    let mut bytes = Vec::new();
-    {
-        let work = req.and_then(|res| {
-            res.body().for_each(|chunk| {
-                bytes.extend_from_slice(&chunk);
-                Ok(())
-            })
-        });
-        core.run(work)?
-    }
-    let result = String::from_utf8(bytes)?;
-    Ok(result)
+    Ok(reqwest::get(url)?.text()?)
 }
 
 /// Convert URL to file name for chching

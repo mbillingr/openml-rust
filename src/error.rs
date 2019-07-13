@@ -4,9 +4,7 @@ use std::string::FromUtf8Error;
 
 use app_dirs::AppDirsError;
 use arff::Error as ArffError;
-use hyper::Error as HyperError;
-use hyper::error::UriError;
-use hyper_tls::Error as TlsError;
+use reqwest::Error as ReqwestError;
 use serde_json::Error as JsonError;
 
 pub type Result<T> = StdResult<T, Error>;
@@ -15,9 +13,7 @@ pub type Result<T> = StdResult<T, Error>;
 pub enum Error {
     IoError(IoError),
     Utf8Error(FromUtf8Error),
-    HyperError(HyperError),
-    HyperUriError(UriError),
-    HyperTlsError(TlsError),
+    HttpsError(ReqwestError),
     JsonError(JsonError),
     ArffError(ArffError),
     AppDirsError(AppDirsError),
@@ -35,21 +31,9 @@ impl From<FromUtf8Error> for Error {
     }
 }
 
-impl From<HyperError> for Error {
-    fn from(e: HyperError) -> Self {
-        Error::HyperError(e)
-    }
-}
-
-impl From<UriError> for Error {
-    fn from(e: UriError) -> Self {
-        Error::HyperUriError(e)
-    }
-}
-
-impl From<TlsError> for Error {
-    fn from(e: TlsError) -> Self {
-        Error::HyperTlsError(e)
+impl From<ReqwestError> for Error {
+    fn from(e: ReqwestError) -> Self {
+        Error::HttpsError(e)
     }
 }
 
@@ -69,7 +53,7 @@ impl From<AppDirsError> for Error {
     fn from(e: AppDirsError) -> Self {
         match e {
             AppDirsError::Io(e) => Error::IoError(e),
-            _ => Error::AppDirsError(e)
+            _ => Error::AppDirsError(e),
         }
     }
 }
