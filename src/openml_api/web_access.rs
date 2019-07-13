@@ -5,7 +5,7 @@ use std::io::{self, Read, Write};
 
 use app_dirs::{app_root, AppDataType, AppInfo};
 
-use error::Result;
+use crate::error::Result;
 
 use super::file_lock::{ExclusiveLock, SharedLock};
 

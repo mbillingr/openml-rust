@@ -19,7 +19,8 @@ use std::iter::FromIterator;
 /// ```
 #[derive(Debug)]
 pub struct NaiveBayesClassifier<C>
-where C: Eq + Hash
+where
+    C: Eq + Hash,
 {
     class_distributions: HashMap<C, FeatureDistribution>,
 }
@@ -27,7 +28,7 @@ where C: Eq + Hash
 /// Distribution of each feature column
 #[derive(Debug, Clone)]
 struct FeatureDistribution {
-    distributions: Vec<NormalDistribution>
+    distributions: Vec<NormalDistribution>,
 }
 
 /// Univariate Normal Distribution
@@ -35,15 +36,15 @@ struct FeatureDistribution {
 struct NormalDistribution {
     sum: f64,
     sqsum: f64,
-    n: usize
+    n: usize,
 }
 
 impl<'a, C: 'a, J> FromIterator<(J, &'a C)> for NaiveBayesClassifier<C>
 where
-    J: IntoIterator<Item=&'a f64>,
+    J: IntoIterator<Item = &'a f64>,
     C: Eq + Hash + Copy,
 {
-    fn from_iter<I: IntoIterator<Item=(J, &'a C)>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = (J, &'a C)>>(iter: I) -> Self {
         let mut class_distributions = HashMap::new();
 
         for (x, &y) in iter {
@@ -62,13 +63,14 @@ where
         }
 
         NaiveBayesClassifier {
-            class_distributions
+            class_distributions,
         }
     }
 }
 
 impl<C> NaiveBayesClassifier<C>
-where  C: Eq + Hash + Copy,
+where
+    C: Eq + Hash + Copy,
 {
     /// predict target class for a single feature vector
     pub fn predict(&self, x: &[f64]) -> C {
@@ -98,7 +100,7 @@ where  C: Eq + Hash + Copy,
 impl FeatureDistribution {
     fn new() -> Self {
         FeatureDistribution {
-            distributions: Vec::new()
+            distributions: Vec::new(),
         }
     }
 }
@@ -108,7 +110,7 @@ impl NormalDistribution {
         NormalDistribution {
             sum: 0.0,
             sqsum: 0.0,
-            n: 0
+            n: 0,
         }
     }
 
@@ -131,7 +133,6 @@ impl NormalDistribution {
         let xm = x - self.mean();
 
         0.5 * ((1.0 / (2.0 * f64::consts::PI * v)).ln() - (xm * xm) / v)
-
     }
 }
 
@@ -143,15 +144,14 @@ impl fmt::Debug for NormalDistribution {
 
 #[test]
 fn nbc() {
-    let data = vec![(vec![1.0, 2.0], 'A'),
-                    (vec![2.0, 1.0], 'A'),
-                    (vec![1.0, 5.0], 'B'),
-                    (vec![2.0, 6.0], 'B')];
+    let data = vec![
+        (vec![1.0, 2.0], 'A'),
+        (vec![2.0, 1.0], 'A'),
+        (vec![1.0, 5.0], 'B'),
+        (vec![2.0, 6.0], 'B'),
+    ];
 
-    let nbc: NaiveBayesClassifier<_> = data
-        .iter()
-        .map(|(x, y)| (x, y))
-        .collect();
+    let nbc: NaiveBayesClassifier<_> = data.iter().map(|(x, y)| (x, y)).collect();
 
     assert_eq!(nbc.predict(&[1.5, 1.5]), 'A');
     assert_eq!(nbc.predict(&[5.5, 1.5]), 'A');

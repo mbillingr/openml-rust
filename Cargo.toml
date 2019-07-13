@@ -2,6 +2,7 @@
 name = "openml"
 version = "0.1.2"
 authors = ["Martin Billinger <flkazemakase@gmail.com>"]
+edition = "2018"
 
 description = "A rust interface to [OpenML](http://openml.org/)."
 keywords = ["machine-learning", "openml", "data", "dataset"]

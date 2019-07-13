@@ -62,25 +62,19 @@ pub mod prelude;
 mod procedures;
 mod tasks;
 
-pub use measure_accumulator::{
-    MeasureAccumulator,
-    PredictiveAccuracy,
-    RootMeanSquaredError
+pub use crate::measure_accumulator::{
+    MeasureAccumulator, PredictiveAccuracy, RootMeanSquaredError,
 };
 
-pub use tasks::{
-    SupervisedClassification,
-    SupervisedRegression,
-    Task
-};
+pub use crate::tasks::{SupervisedClassification, SupervisedRegression, Task};
 
 #[cfg(test)]
 mod tests {
     use log::Level;
     use time::PreciseTime;
 
-    use baseline::NaiveBayesClassifier;
-    use measure_accumulator::PredictiveAccuracy;
+    use crate::baseline::NaiveBayesClassifier;
+    use crate::measure_accumulator::PredictiveAccuracy;
 
     use super::*;
 
@@ -116,14 +110,10 @@ mod tests {
 
         let result: PredictiveAccuracy<_> = task.run(|train, test| {
             // train classifier
-            let nbc: NaiveBayesClassifier<u8> = train
-                .map(|(x, y)| (x, y))
-                .collect();
+            let nbc: NaiveBayesClassifier<u8> = train.map(|(x, y)| (x, y)).collect();
 
             // test classifier
-            let y_out: Vec<_> = test
-                .map(|x| nbc.predict(x))
-                .collect();
+            let y_out: Vec<_> = test.map(|x| nbc.predict(x)).collect();
 
             Box::new(y_out.into_iter())
         });

@@ -91,28 +91,28 @@ where
     }
 }
 
-
 /// Adjusted Rand Index
 #[derive(Debug)]
 pub struct AdjustedRandIndex<T>
-where T: Eq + Hash,
+where
+    T: Eq + Hash,
 {
-    contingency_table: HashMap<(T, T), usize>
+    contingency_table: HashMap<(T, T), usize>,
 }
 
-
-
 impl<T> MeasureAccumulator<T> for AdjustedRandIndex<T>
-    where T: Eq + Hash + Clone,
+where
+    T: Eq + Hash + Clone,
 {
     fn new() -> Self {
         AdjustedRandIndex {
-            contingency_table: HashMap::new()
+            contingency_table: HashMap::new(),
         }
     }
 
     fn update_one(&mut self, known: &T, pred: &T) {
-        let n = self.contingency_table
+        let n = self
+            .contingency_table
             .entry((known.clone(), pred.clone()))
             .or_insert(0);
         *n += 1;
